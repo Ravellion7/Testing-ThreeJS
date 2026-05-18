@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crownfall - Arena Survival</title>
+    <link rel="icon" href="../Images/CROWNFALL.png" type="image/png">
+    <link rel="stylesheet" href="../CSS/arena.css">
+    
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- Game Canvas (placeholder for 3D game) -->
+    <div class="game-canvas">
+        <div class="center-crosshair">
+            <div class="crosshair-line crosshair-vertical"></div>
+            <div class="crosshair-line crosshair-horizontal"></div>
+        </div>
+        
+        <!-- Weapon Pickup Prompt -->
+        <div class="pickup-prompt" id="pickup-prompt" style="display: none;">
+            Press <span style="color: #daa520; font-weight: bold;">E</span> to grab weapon
+        </div>
+    </div>
+    
+    <!-- HUD ELEMENTS -->
+    
+    <!-- TOP LEFT: Score & Player Notifications -->
+    <div class="hud-top-left">
+        <div class="score-container">
+            <div class="score-label">Score:</div>
+            <div class="score-value" id="score">0</div>
+        </div>
+        <div class="notification-panel" id="notification-panel"></div>
+    </div>
+    
+    <!-- TOP CENTER: Time -->
+    <div class="hud-top-center">
+        <div class="time-container">
+            <div class="time-label">TIME</div>
+            <div class="time-value" id="time">00:00</div>
+        </div>
+    </div>
+    
+    <!-- TOP RIGHT: Wave & Enemies -->
+    <div class="hud-top-right">
+        <div class="wave-info">
+            <div class="wave-label">Wave</div>
+            <div class="wave-number" id="wave">1</div>
+        </div>
+        <div class="next-wave-countdown" id="next-wave-countdown"></div>
+        <div class="enemies-info">
+            <div class="enemies-label">Enemies remaining:</div>
+            <div class="enemies-count" id="enemies-remaining">10</div>
+        </div>
+    </div>
+    
+    <!-- BOTTOM LEFT: Health & Shield -->
+    <div class="hud-bottom-left">
+        <!-- Powerups Display -->
+        <div class="powerups-container" id="powerups-container">
+            <div class="powerups-label">Powerups</div>
+            <img src="../Images/speed.png" alt="Speed powerup" id="speed-powerup-icon" class="speed-powerup-icon">
+            <div class="powerups-list" id="powerups-list"></div>
+        </div>
+        
+        <!-- Health Bar -->
+        <div class="stat-bar health-bar">
+            <div class="stat-label">Health</div>
+            <div class="bar-container">
+                <div class="bar-fill health-fill" id="health-fill"></div>
+            </div>
+            <div class="stat-value" id="health-value">100</div>
+        </div>
+        
+        <!-- Shield Bar -->
+        <div class="stat-bar shield-bar">
+            <div class="stat-label">Shield</div>
+            <div class="bar-container">
+                <div class="bar-fill shield-fill" id="shield-fill"></div>
+            </div>
+            <div class="stat-value" id="shield-value">100</div>
+        </div>
+    </div>
+    
+    <!-- BOTTOM RIGHT: Ammunition & Fire Mode -->
+    <div class="hud-bottom-right">
+        <div class="ammo-display">
+            <div class="ammo-current" id="ammo-current">30</div>
+            <div class="ammo-separator">|</div>
+            <div class="ammo-total" id="ammo-total">180</div>
+        </div>
+        <div class="fire-mode" id="fire-mode">Auto</div>
+    </div>
+    
+    <!-- PAUSE MENU -->
+    <div class="pause-overlay" id="pause-overlay">
+        <div class="pause-menu">
+            <div class="pause-header">
+                <h1 class="pause-title">
+                    <img src="../Images/CROWNFALL.png" alt="Crownfall Logo" class="pause-logo">
+                    <span>CROWNFALL</span>
+                </h1>
+                <p class="pause-subtitle">Game Paused</p>
+            </div>
+            
+            <div class="pause-buttons">
+                <button class="pause-btn continue-btn" id="continue-btn">Continue</button>
+                <button class="pause-btn settings-btn" id="settings-btn">Settings</button>
+                <button class="pause-btn menu-btn" id="menu-btn">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEATH SCREEN -->
+    <div class="death-overlay" id="death-overlay">
+        <div class="death-screen">
+            <h1 class="death-title">You Died!</h1>
+
+            <div class="death-stats">
+                <div class="death-stat-row">
+                    <span class="death-stat-label">You lasted:</span>
+                    <span class="death-stat-value" id="death-time">00:00</span>
+                </div>
+                <div class="death-stat-row">
+                    <span class="death-stat-label">You died on the wave:</span>
+                    <span class="death-stat-value" id="death-wave">Wave 1</span>
+                </div>
+                <div class="death-stat-row">
+                    <span class="death-stat-label">Your score was:</span>
+                    <span class="death-stat-value" id="death-score">0</span>
+                </div>
+            </div>
+
+            <div class="death-buttons">
+                <button class="death-btn retry-btn" id="retry-btn">Retry</button>
+                <button class="death-btn death-menu-btn" id="death-menu-btn">Main Menu</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- IN-GAME SETTINGS MODAL -->
+    <div class="ingame-settings-overlay" id="ingame-settings-overlay">
+        <div class="ingame-settings-modal">
+            <!-- Settings content will be loaded here -->
+            <div class="ingame-settings-header">
+                <h2>SETTINGS</h2>
+                <button class="close-settings-btn" id="close-settings-btn">✕</button>
+            </div>
+            
+            <div class="ingame-settings-content">
+                <!-- AUDIO SECTION -->
+                <section class="ingame-settings-section">
+                    <h3 class="ingame-section-title"><img src="../Images/volume.png" alt="Audio" class="ingame-section-icon"> AUDIO</h3>
+                    <div class="ingame-setting-row">
+                        <label>Music Volume</label>
+                        <div class="ingame-slider-container">
+                            <input type="range" id="ingame-music-volume" min="0" max="100" value="70" class="ingame-volume-slider">
+                            <span class="ingame-slider-value" id="ingame-music-value">70%</span>
+                        </div>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Effects Volume</label>
+                        <div class="ingame-slider-container">
+                            <input type="range" id="ingame-effects-volume" min="0" max="100" value="80" class="ingame-volume-slider">
+                            <span class="ingame-slider-value" id="ingame-effects-value">80%</span>
+                        </div>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label for="ingame-mute-all">Mute All Sound</label>
+                        <label class="ingame-toggle-switch">
+                            <input type="checkbox" id="ingame-mute-all">
+                            <span class="ingame-toggle-slider"></span>
+                        </label>
+                    </div>
+                </section>
+                
+                <!-- CONTROLS SECTION -->
+                <section class="ingame-settings-section">
+                    <h3 class="ingame-section-title"><img src="../Images/controller.png" alt="Controls" class="ingame-section-icon"> CONTROLS</h3>
+                    <div class="ingame-setting-row">
+                        <label>Move Forward</label>
+                        <button class="ingame-key-bind-btn" data-action="moveForward">W</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Move Left</label>
+                        <button class="ingame-key-bind-btn" data-action="moveLeft">A</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Move Backward</label>
+                        <button class="ingame-key-bind-btn" data-action="moveBackward">S</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Move Right</label>
+                        <button class="ingame-key-bind-btn" data-action="moveRight">D</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Use/Interact</label>
+                        <button class="ingame-key-bind-btn" data-action="use">E</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Shoot</label>
+                        <button class="ingame-key-bind-btn" data-action="shoot">Left Mouse</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label>Reload</label>
+                        <button class="ingame-key-bind-btn" data-action="reload">R</button>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <button class="ingame-reset-btn" id="ingame-reset-controls">Reset to Default Keys</button>
+                    </div>
+                </section>
+                
+                <!-- GRAPHICS SECTION -->
+                <section class="ingame-settings-section">
+                    <h3 class="ingame-section-title"><img src="../Images/graphics.png" alt="Graphics" class="ingame-section-icon"> GRAPHICS</h3>
+                    <div class="ingame-setting-row">
+                        <label>Quality</label>
+                        <select id="ingame-graphics-quality" class="ingame-quality-select">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label for="ingame-enable-shadows">Enable Shadows</label>
+                        <label class="ingame-checkbox-container">
+                            <input type="checkbox" id="ingame-enable-shadows" checked>
+                            <span class="ingame-checkmark"></span>
+                        </label>
+                    </div>
+                    <div class="ingame-setting-row">
+                        <label for="ingame-enable-particles">Enable Particles</label>
+                        <label class="ingame-checkbox-container">
+                            <input type="checkbox" id="ingame-enable-particles" checked>
+                            <span class="ingame-checkmark"></span>
+                        </label>
+                    </div>
+                </section>
+            </div>
+            
+            <div class="ingame-settings-actions">
+                <button class="ingame-close-btn" id="back-to-game-btn">Back</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="../JS/arena.js"></script>
+</body>
+</html>

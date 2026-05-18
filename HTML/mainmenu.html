@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CROWNFALL - Main Menu</title>
+    <link class="favicon" rel="icon" href="../Images/CROWNFALL.png" type="image/png">
+    <link rel="stylesheet" href="../CSS/mainmenu.css">
+
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <!-- 3D background canvas -->
+    <canvas id="menu-canvas"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none;"></canvas>
+
+    <!-- Background layers -->
+    <div class="bg-overlay" style="z-index: 1;"></div>
+    <div class="scanlines" style="z-index: 2;"></div>
+
+    <!-- Main container -->
+    <div class="menu-container" style="z-index: 10; position: relative;">
+        <!-- Game logo -->
+        <div class="logo-section">
+            <h1 class="game-title">
+                <img src="../Images/CROWNFALL.png" alt="Crownfall Logo" class="game-logo">
+                <span class="title-main">CROWNFALL</span>
+            </h1>
+            <p class="game-subtitle">Arena Survival Multiplayer</p>
+        </div>
+
+        <!-- Menu options -->
+        <nav class="main-menu">
+            <div class="menu-item" data-index="1">
+                <a href="arena.html">
+                    <span class="menu-icon"><img src="../Images/play.png" alt="Play"></span>
+                    <span class="menu-text">ARENA SINGLEPLAYER</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="2">
+                <a href="arena.html?multiplayer=1">
+                    <span class="menu-icon"><img src="../Images/play.png" alt="Arena Multiplayer"></span>
+                    <span class="menu-text">ARENA MULTIPLAYER (2P)</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="3">
+                <a href="kingofthehill.html">
+                    <span class="menu-icon"><img src="../Images/koth.png" alt="King of the Hill"></span>
+                    <span class="menu-text">KING OF THE HILL</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="4">
+                <a href="settings.html">
+                    <span class="menu-icon"><img src="../Images/settings.png" alt="Settings"></span>
+                    <span class="menu-text">SETTINGS</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="5">
+                <a href="leaderboard.html">
+                    <span class="menu-icon"><img src="../Images/leaderboard.png" alt="Leaderboard"></span>
+                    <span class="menu-text">LEADERBOARD</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="6">
+                <a href="credits.html">
+                    <span class="menu-icon"><img src="../Images/credits.png" alt="Credits"></span>
+                    <span class="menu-text">CREDITS</span>
+                </a>
+            </div>
+            <div class="menu-item" data-index="7">
+                <a href="exit.html">
+                    <span class="menu-icon"><img src="../Images/exit.png" alt="Exit"></span>
+                    <span class="menu-text">EXIT</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Footer info -->
+        <div class="footer-info">
+            <p class="version">Work In Progress</p>
+        </div>
+    </div>
+
+    <!-- Match Settings Modal -->
+    <div id="match-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>ARENA MATCH SETTINGS</h2>
+                <button id="modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Map Selection -->
+                <div class="setting-section">
+                    <label class="section-title">SELECT BATTLEGROUND</label>
+                    <div class="map-grid">
+                        <div class="map-card active" data-map="city">
+                            <div class="map-thumbnail city-thumb"></div>
+                            <div class="map-info">
+                                <span class="map-name">CITY</span>
+                                <span class="map-desc">A big city inspired map.</span>
+                            </div>
+                        </div>
+                        <div class="map-card" data-map="town">
+                            <div class="map-thumbnail town-thumb"></div>
+                            <div class="map-info">
+                                <span class="map-name">TOWN</span>
+                                <span class="map-desc">A small town inspired map.</span>
+                            </div>
+                        </div>
+                        <div class="map-card" data-map="desert">
+                            <div class="map-thumbnail desert-thumb"></div>
+                            <div class="map-info">
+                                <span class="map-name">DESERT OUTPOST</span>
+                                <span class="map-desc">Dusty post-apocalyptic arena with thick fog.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Difficulty Selection -->
+                <div class="setting-section">
+                    <label class="section-title">CHOOSE DIFFICULTY</label>
+                    <div class="difficulty-selectors">
+                        <button class="diff-btn" data-diff="easy">
+                            <span class="diff-title">EASY</span>
+                            <span class="diff-desc">Slow enemies, limited vision, 50% damage</span>
+                        </button>
+                        <button class="diff-btn active" data-diff="medium">
+                            <span class="diff-title">MEDIUM</span>
+                            <span class="diff-desc">Standard AI, default stats</span>
+                        </button>
+                        <button class="diff-btn" data-diff="hard">
+                            <span class="diff-title">HARD</span>
+                            <span class="diff-desc">Lethal speed, extreme vision, 150% damage</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="launch-match-btn" class="glowing-btn">LAUNCH BATTLE</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../JS/mainmenu.js"></script>
+</body>
+
+</html>

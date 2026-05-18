@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crownfall - Settings</title>
+    <link rel="icon" href="../Images/CROWNFALL.png" type="image/png">
+    <link rel="stylesheet" href="../CSS/settings.css">
+</head>
+<body>
+    <!-- Background layers -->
+    <div class="bg-overlay"></div>
+    <div class="scanlines"></div>
+    
+    <!-- Main container -->
+    <div class="settings-container">
+        <!-- Header -->
+        <div class="settings-header">
+            <h1 class="settings-title">SETTINGS</h1>
+            <p class="settings-subtitle">Configure your game preferences</p>
+        </div>
+        
+        <!-- Settings content -->
+        <div class="settings-content">
+            
+            <!-- AUDIO SECTION -->
+            <section class="settings-section">
+                <h2 class="section-title"><img src="../Images/volume.png" alt="Audio" class="section-icon"> AUDIO</h2>
+                <div class="section-content">
+                    
+                    <!-- Music Volume -->
+                    <div class="setting-row">
+                        <label for="music-volume">Music Volume</label>
+                        <div class="slider-container">
+                            <input type="range" id="music-volume" min="0" max="100" value="100" class="volume-slider">
+                            <span class="slider-value" id="music-value">100%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Effects Volume -->
+                    <div class="setting-row">
+                        <label for="effects-volume">Effects Volume</label>
+                        <div class="slider-container">
+                            <input type="range" id="effects-volume" min="0" max="100" value="100" class="volume-slider">
+                            <span class="slider-value" id="effects-value">100%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Mute All -->
+                    <div class="setting-row">
+                        <label for="mute-all">Mute All Sound</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="mute-all">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                </div>
+            </section>
+            
+            <!-- CONTROLS SECTION -->
+            <section class="settings-section">
+                <h2 class="section-title"><img src="../Images/controller.png" alt="Controls" class="section-icon"> CONTROLS</h2>
+                <div class="section-content">
+                    
+                    <!-- Movement Keys -->
+                    <div class="setting-row">
+                        <label>Move Forward</label>
+                        <button class="key-bind-btn" data-action="moveForward">W</button>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <label>Move Left</label>
+                        <button class="key-bind-btn" data-action="moveLeft">A</button>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <label>Move Backward</label>
+                        <button class="key-bind-btn" data-action="moveBackward">S</button>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <label>Move Right</label>
+                        <button class="key-bind-btn" data-action="moveRight">D</button>
+                    </div>
+                    
+                    <!-- Use Key -->
+                    <div class="setting-row">
+                        <label>Use/Interact</label>
+                        <button class="key-bind-btn" data-action="use">E</button>
+                    </div>
+                    
+                    <!-- Shooting Key -->
+                    <div class="setting-row">
+                        <label>Shoot</label>
+                        <button class="key-bind-btn" data-action="shoot">Left Mouse</button>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <label>Reload</label>
+                        <button class="key-bind-btn" data-action="reload">R</button>
+                    </div>
+                    
+                    <!-- Reset Controls -->
+                    <div class="setting-row">
+                        <button class="reset-btn" id="reset-controls">Reset to Default Keys</button>
+                    </div>
+                    
+                </div>
+            </section>
+            
+            <!-- GRAPHICS SECTION -->
+            <section class="settings-section">
+                <h2 class="section-title"><img src="../Images/graphics.png" alt="Graphics" class="section-icon"> GRAPHICS</h2>
+                <div class="section-content">
+                    
+                    <!-- Quality -->
+                    <div class="setting-row">
+                        <label for="graphics-quality">Quality</label>
+                        <select id="graphics-quality" class="quality-select">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Enable Shadows -->
+                    <div class="setting-row">
+                        <label for="enable-shadows">Enable Shadows</label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="enable-shadows" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <!-- Enable Particles -->
+                    <div class="setting-row">
+                        <label for="enable-particles">Enable Particles</label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="enable-particles" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                </div>
+            </section>
+            
+            <!-- MULTIPLAYER SECTION -->
+            <section class="settings-section">
+                <h2 class="section-title"><img src="../Images/multiplayer.png" alt="Multiplayer" class="section-icon"> MULTIPLAYER</h2>
+                <div class="section-content">
+                    
+                    <!-- Nickname -->
+                    <div class="setting-row">
+                        <label for="player-nickname">Nickname</label>
+                        <input type="text" id="player-nickname" class="text-input" placeholder="Enter your nickname" maxlength="20">
+                    </div>
+                    
+                </div>
+            </section>
+            
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="settings-actions">
+            <button class="action-btn save-btn" id="save-settings">Save Settings</button>
+            <button class="action-btn back-btn" id="back-to-menu">Back to Menu</button>
+        </div>
+        
+        <!-- Status Message -->
+        <div class="status-message" id="status-message"></div>
+        
+    </div>
+    
+    <!-- Key Binding Modal -->
+    <div class="modal" id="key-bind-modal">
+        <div class="modal-content">
+            <h3>Press any key...</h3>
+            <p>Press the key you want to assign</p>
+            <button class="cancel-btn" id="cancel-bind">Cancel</button>
+        </div>
+    </div>
+    
+    <script src="../JS/settings.js"></script>
+</body>
+</html>

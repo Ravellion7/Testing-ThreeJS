@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crownfall - Leaderboard</title>
+    <link rel="icon" href="../Images/CROWNFALL.png" type="image/png">
+    <link rel="stylesheet" href="../CSS/leaderboard.css">
+</head>
+<body>
+    <!-- Background layers -->
+    <div class="bg-overlay"></div>
+    <div class="scanlines"></div>
+    
+    <!-- Main container -->
+    <div class="leaderboard-container">
+        <!-- Header -->
+        <div class="leaderboard-header">
+            <h1 class="leaderboard-title">LEADERBOARD</h1>
+            <p class="leaderboard-subtitle">Top Warriors of Crownfall</p>
+        </div>
+        
+        <!-- Leaderboard table -->
+        <div class="table-container">
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th class="col-position">Rank</th>
+                        <th class="col-player">Player</th>
+                        <th class="col-mode">Mode</th>
+                        <th class="col-score">Score</th>
+                        <th class="col-date">Date</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #a8906e; padding: 20px;">Connecting to score server...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Status Message -->
+        <div class="status-message" id="status-message"></div>
+        
+        <!-- Action Buttons -->
+        <div class="leaderboard-actions">
+            <button class="action-btn refresh-btn" id="refresh-btn">
+                <span class="btn-text">Refresh</span>
+            </button>
+            <button class="action-btn back-btn" id="back-btn">
+                <span class="btn-text">Back to Menu</span>
+            </button>
+        </div>
+    </div>
+    
+    <script src="../JS/leaderboard.js"></script>
+</body>
+</html>
