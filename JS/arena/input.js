@@ -126,6 +126,20 @@ export function setupDeathScreenListeners() {
         leaveMultiplayerArenaSession('Returning to main menu');
         setTimeout(() => { window.location.href = 'mainmenu.html'; }, 80);
     });
+
+    // Expose sharing functions on window (Requirement 8)
+    window._arenaShareTwitter = function() {
+        const score = Math.max(0, Math.floor(gameState.score || 0));
+        const mode = "Arena Survival";
+        const text = encodeURIComponent(`I just scored ${score} points in Crownfall (${mode})! Can you beat my high score? ⚔️🛡️`);
+        const shareUrl = `https://twitter.com/intent/tweet?text=${text}&hashtags=Crownfall,ThreeJS,Gaming`;
+        window.open(shareUrl, '_blank', 'width=600,height=400');
+    };
+
+    window._arenaShareFacebook = function() {
+        const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin)}`;
+        window.open(shareUrl, '_blank', 'width=600,height=400');
+    };
 }
 
 // ── In-game settings modal ────────────────────────────────────

@@ -44,6 +44,7 @@ import {
     setupIngameSettingsModal, handleResize, updateGameTimer,
     handlePlayerDeath, applyDamageToPlayer,
 } from './arena/input.js';
+import { initAmbientDustParticles, updateParticles } from './arena/particles.js';
 
 // ── Global hooks (consumed by sub-modules via window) ─────────
 window._arenaMouseState = mouseState;
@@ -61,6 +62,7 @@ updateWeaponHudValues();
 setupPauseMenuListeners();
 setupIngameSettingsModal();
 setupDeathScreenListeners();
+initAmbientDustParticles();
 attachInputHandlers(utilityPickups, weaponPickups, multiplayerState, isMultiplayerArenaEnabled);
 connectMultiplayerArena(weaponPickups, utilityPickups, selectedMap, selectedDifficulty);
 
@@ -98,6 +100,15 @@ function animate() {
         timeState.weapon += delta;
 
         updateGameTimer(delta);
+        
+        // Sweeping searchlight target (Requirement 3: Focal Light animation)
+        const searchlightTarget = scene.getObjectByName('_arena_searchlight_target');
+        if (searchlightTarget) {
+            const time = clock.getElapsedTime() * 0.45;
+            searchlightTarget.position.x = Math.sin(time) * 14;
+            searchlightTarget.position.z = Math.cos(time * 0.7) * 14 - 4;
+        }
+
         updateSpeedPowerup(delta);
         updatePlayer(delta);
         updateThirdPersonCamera(delta);
@@ -133,6 +144,7 @@ function animate() {
 
         updateWeaponPickups(delta, timeState.weapon);
         updateUtilityPickups(delta, timeState.weapon, notifyServerPickupCollect);
+        updateParticles(delta);
         sendLocalPlayerPoseToServer();
     }
 

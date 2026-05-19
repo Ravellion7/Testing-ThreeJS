@@ -52,9 +52,27 @@ export function createEnvironment() {
         }, undefined, (e) => console.warn('HDRI load failed', e));
     }
 
-    scene.add(new THREE.HemisphereLight(hemiSky, hemiGround, 1.6));
+    scene.add(new THREE.HemisphereLight(hemiSky, hemiGround, 1.3));
+    
+    // Explicit Ambient Light (Requirement 3: Ambient Light)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+    scene.add(ambientLight);
 
-    const dir = new THREE.DirectionalLight(dirColor, 2.2);
+    // Sweeping Focal Searchlight (Requirement 3: Focal Light)
+    const searchlight = new THREE.SpotLight(selectedMap === 'desert' ? 0xffbb66 : 0x55ccff, 350, 45, Math.PI / 7, 0.4, 0.15);
+    searchlight.name = '_arena_searchlight';
+    searchlight.position.set(0, 18, 0);
+    searchlight.castShadow = true;
+    searchlight.shadow.mapSize.set(1024, 1024);
+    scene.add(searchlight);
+    
+    const searchlightTarget = new THREE.Object3D();
+    searchlightTarget.name = '_arena_searchlight_target';
+    searchlightTarget.position.set(0, FLOOR_Y_OFFSET, -5);
+    scene.add(searchlightTarget);
+    searchlight.target = searchlightTarget;
+
+    const dir = new THREE.DirectionalLight(dirColor, 2.0);
     dir.position.set(12, 18, 10);
     dir.castShadow = true;
     dir.shadow.mapSize.set(2048, 2048);
@@ -63,7 +81,7 @@ export function createEnvironment() {
     dir.shadow.camera.top = 30; dir.shadow.camera.bottom = -30;
     scene.add(dir);
 
-    const fill = new THREE.PointLight(fillColor, 10, 30, 2);
+    const fill = new THREE.PointLight(fillColor, 8, 30, 2);
     fill.position.set(-8, 6, -6);
     scene.add(fill);
 

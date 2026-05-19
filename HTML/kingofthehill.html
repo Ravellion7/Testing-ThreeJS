@@ -6,6 +6,15 @@
     <title>Crownfall - King of the Hill</title>
     <link rel="icon" href="../Images/CROWNFALL.png" type="image/png">
     <link rel="stylesheet" href="../CSS/arena.css">
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
     <!-- Game Canvas -->
@@ -13,6 +22,11 @@
         <div class="center-crosshair">
             <div class="crosshair-line crosshair-vertical"></div>
             <div class="crosshair-line crosshair-horizontal"></div>
+        </div>
+        
+        <!-- Weapon Pickup Prompt -->
+        <div class="pickup-prompt" id="pickup-prompt" style="display: none;">
+            Press <span style="color: #daa520; font-weight: bold;">E</span> to grab weapon
         </div>
     </div>
     
@@ -196,7 +210,73 @@
             </div>
         </div>
     </div>
+
+    <!-- DEATH SCREEN -->
+    <div class="death-overlay" id="death-overlay">
+        <div class="death-screen">
+            <h1 class="death-title">YOU DIED</h1>
+            <p class="death-subtitle">Better luck next time</p>
+            <div class="death-stats">
+                <div class="death-stat-row">
+                    <span class="death-stat-label">Time survived:</span>
+                    <span class="death-stat-value" id="death-time">00:00</span>
+                </div>
+                <div class="death-stat-row">
+                    <span class="death-stat-label">Hill captured:</span>
+                    <span class="death-stat-value" id="death-wave">0%</span>
+                </div>
+                <div class="death-stat-row">
+                    <span class="death-stat-label">Your score was:</span>
+                    <span class="death-stat-value" id="death-score">0</span>
+                </div>
+            </div>
+
+            <!-- Social sharing buttons (Requirement 8) -->
+            <div class="social-share-container" style="margin-top: 15px; margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
+                <button class="death-btn share-twitter-btn" style="padding: 8px 16px; border: 1px solid #1da1f2; background: rgba(29, 161, 242, 0.15); color: #1da1f2; font-size: 0.9em;" onclick="window._arenaShareTwitter()">Share on X / Twitter</button>
+                <button class="death-btn share-facebook-btn" style="padding: 8px 16px; border: 1px solid #1877f2; background: rgba(24, 119, 242, 0.15); color: #1877f2; font-size: 0.9em;" onclick="window._arenaShareFacebook()">Share on Facebook</button>
+            </div>
+
+            <div class="death-buttons">
+                <button class="death-btn retry-btn" id="retry-btn">Retry</button>
+                <button class="death-btn death-menu-btn" id="death-menu-btn">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VICTORY SCREEN -->
+    <div class="death-overlay" id="victory-overlay" style="background: rgba(14, 120, 30, 0.25);">
+        <div class="death-screen" style="border-color: rgba(80,220,100,0.45); box-shadow: 0 0 60px rgba(50,200,80,0.25), inset 0 0 40px rgba(50,200,80,0.05); background: linear-gradient(135deg, rgba(12, 30, 15, 0.95) 0%, rgba(16, 45, 20, 0.95) 50%, rgba(12, 30, 15, 0.95) 100%);">
+            <h1 class="death-title" style="color:#50dc64; text-shadow: 0 0 30px rgba(80,220,100,0.7);">VICTORIA</h1>
+            <p class="death-subtitle" style="color:#a8f0b0; font-size: 1.2em; margin-bottom: 20px; letter-spacing: 2px; text-transform: uppercase;">¡Completaste el juego!</p>
+            <div class="death-stats">
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Hill Status:</span>
+                    <span class="death-stat-value" id="victory-wave" style="color: #50dc64;">100% Captured</span>
+                </div>
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Tiempo total:</span>
+                    <span class="death-stat-value" id="victory-time" style="color: #50dc64;">00:00</span>
+                </div>
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Puntuación final:</span>
+                    <span class="death-stat-value" id="victory-score" style="color: #50dc64;">0</span>
+                </div>
+            </div>
+
+            <!-- Social sharing buttons (Requirement 8) -->
+            <div class="social-share-container" style="margin-top: 15px; margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
+                <button class="death-btn share-twitter-btn" style="padding: 8px 16px; border: 1px solid #1da1f2; background: rgba(29, 161, 242, 0.15); color: #1da1f2; font-size: 0.9em; border-color: #356b40;" onclick="window._arenaShareTwitter()">Share on X / Twitter</button>
+                <button class="death-btn share-facebook-btn" style="padding: 8px 16px; border: 1px solid #1877f2; background: rgba(24, 119, 242, 0.15); color: #1877f2; font-size: 0.9em; border-color: #356b40;" onclick="window._arenaShareFacebook()">Share on Facebook</button>
+            </div>
+
+            <div class="death-buttons">
+                <button class="death-btn retry-btn" id="victory-retry-btn" style="border-color: #356b40; color: #50dc64; background: rgba(10, 30, 15, 0.6);">Jugar de nuevo</button>
+                <button class="death-btn death-menu-btn" id="victory-menu-btn" style="border-color: #356b40; color: #50dc64; background: rgba(10, 30, 15, 0.6);">Menú Principal</button>
+            </div>
+        </div>
+    </div>
     
-    <script src="../JS/kingofthehill.js"></script>
+    <script type="module" src="../JS/kingofthehill.js"></script>
 </body>
 </html>

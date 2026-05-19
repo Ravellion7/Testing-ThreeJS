@@ -194,6 +194,8 @@ export function getAliveEnemyHitMeshes(enemies, enemyHitMeshOwner) {
     return meshes;
 }
 
+import { spawnBulletImpactParticles } from './particles.js';
+
 export function shootRifleOnce(enemies, enemyHitMeshOwner, applyDamageToEnemy, notifyServerRifleShot, isMultiplayerArenaEnabled, multiplayerState) {
     if (!canShootRifle()) return false;
     const { equippedWeaponCombatState } = weaponState;
@@ -209,18 +211,31 @@ export function shootRifleOnce(enemies, enemyHitMeshOwner, applyDamageToEnemy, n
     let effectiveRange = maxRange, blockingPoint = null;
     if (blockers.length > 0) { effectiveRange = Math.min(effectiveRange, blockers[0].distance); blockingPoint = blockers[0].point; }
     shotRaycaster.set(tempVectorB, tempVectorA); shotRaycaster.far = effectiveRange;
+    
+    let hitNormal = new THREE.Vector3(0, 1, 0);
     const isServerAuth = isMultiplayerArenaEnabled() && multiplayerState.sharedArenaActive;
     if (isServerAuth) {
         notifyServerRifleShot(tempVectorA);
-        if (blockingPoint) tempVectorC.copy(blockingPoint);
+        if (blockingPoint) {
+            tempVectorC.copy(blockingPoint);
+            if (blockers[0].face) hitNormal.copy(blockers[0].face.normal).applyQuaternion(blockers[0].object.quaternion);
+        }
     } else {
         const hits = shotRaycaster.intersectObjects(getAliveEnemyHitMeshes(enemies, enemyHitMeshOwner), false);
         if (hits.length > 0) {
             tempVectorC.copy(hits[0].point);
+            if (hits[0].face) hitNormal.copy(hits[0].face.normal).applyQuaternion(hits[0].object.quaternion);
             const hitEnemy = enemyHitMeshOwner.get(hits[0].object.uuid);
             if (hitEnemy && !hitEnemy.isDead) applyDamageToEnemy(hitEnemy, 34);
-        } else if (blockingPoint) { tempVectorC.copy(blockingPoint); }
+        } else if (blockingPoint) {
+            tempVectorC.copy(blockingPoint);
+            if (blockers[0].face) hitNormal.copy(blockers[0].face.normal).applyQuaternion(blockers[0].object.quaternion);
+        }
     }
+    
+    // Spawn physical spark particle effects on collision point
+    spawnBulletImpactParticles(tempVectorC, hitNormal);
+    
     spawnShotTracer(tempVectorB, tempVectorC, equippedWeaponCombatState.tracerLifetime || weaponCombatDefaults.rifle.tracerLifetime);
     updateWeaponHudValues();
     return true;

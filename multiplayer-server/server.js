@@ -1,5 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
+const http = require('http'); // REST Web Service requirement (Requirement 7)
 const WebSocket = require('ws');
 const THREE = require('three');
 
@@ -52,7 +53,67 @@ const UTILITY_PICKUPS = [
   { id: 'u_thunder', x: 3, y: FLOOR_Y + 1.0, z: 15, type: 'thunder', respawnSeconds: 30 },
 ];
 
-const wss = new WebSocket.Server({ port: PORT });
+// Combined HTTP REST Web Service (Requirement 7)
+const server = http.createServer(async (req, res) => {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  // GET /api/leaderboard endpoint
+  if (req.url === '/api/leaderboard' && req.method === 'GET') {
+    try {
+      const data = await loadLeaderboard();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to read scores' }));
+    }
+    return;
+  }
+
+  // POST /api/leaderboard endpoint
+  if (req.url === '/api/leaderboard' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const scoreEntry = JSON.parse(body);
+        const name = (scoreEntry.name && typeof scoreEntry.name === 'string') ? scoreEntry.name.trim() : 'Player';
+        const score = Math.max(0, parseInt(scoreEntry.score) || 0);
+        const mode = (scoreEntry.mode && typeof scoreEntry.mode === 'string') ? scoreEntry.mode.trim() : 'Arena';
+        
+        const today = new Date();
+        const dateStr = String(today.getMonth() + 1).padStart(2, '0') + '/' + String(today.getDate()).padStart(2, '0');
+
+        const currentScores = await loadLeaderboard();
+        currentScores.push({ name, score, mode, date: dateStr });
+        currentScores.sort((a, b) => b.score - a.score);
+        const topScores = currentScores.slice(0, 50);
+        await saveLeaderboard(topScores);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(topScores));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to save score' }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('Not Found');
+});
+
+const wss = new WebSocket.Server({ server });
 const players = new Map();
 const colliderTempA = new THREE.Vector3();
 const colliderTempB = new THREE.Vector3();
@@ -793,4 +854,6 @@ setInterval(() => {
   });
 }, 10000);
 
-console.log(`Multiplayer server running on ws://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Multiplayer server and HTTP REST Web Service running on http://localhost:${PORT}`);
+});

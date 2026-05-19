@@ -86,11 +86,7 @@ function fetchLeaderboard() {
     }
     if (!Array.isArray(localScores)) localScores = [];
 
-    let socket = null;
-    let connectionTimeout = null;
-
     const useLocalFallback = (message) => {
-        if (connectionTimeout) clearTimeout(connectionTimeout);
         renderLeaderboard(localScores.slice(0, 10));
         if (statusMsg) {
             statusMsg.style.display = 'block';
@@ -98,45 +94,75 @@ function fetchLeaderboard() {
         }
     };
 
-    try {
-        const wsUrl = 'ws://localhost:8080';
-        socket = new WebSocket(wsUrl);
+    // Try consuming the HTTP REST Web Service first (Requirement 7)
+    fetch('http://localhost:8080/api/leaderboard')
+        .then(res => {
+            if (!res.ok) throw new Error('REST API status: ' + res.status);
+            return res.json();
+        })
+        .then(serverData => {
+            const merged = mergeAndSortLeaderboards(serverData, localScores);
+            renderLeaderboard(merged);
+            if (statusMsg) statusMsg.style.display = 'none';
+        })
+        .catch(err => {
+            console.warn('HTTP REST Web Service unavailable, trying WebSocket...', err);
+            
+            let socket = null;
+            let connectionTimeout = null;
 
-        // 1.5 seconds timeout to fallback to local scores if server is not responding
-        connectionTimeout = setTimeout(() => {
-            if (socket.readyState !== WebSocket.OPEN) {
-                try { socket.close(); } catch (err) {}
+            try {
+                const wsUrl = 'ws://localhost:8080';
+                socket = new WebSocket(wsUrl);
+
+                // 1.5 seconds timeout to fallback to local scores if server is not responding
+                connectionTimeout = setTimeout(() => {
+                    if (socket.readyState !== WebSocket.OPEN) {
+                        try { socket.close(); } catch (err2) {}
+                        useLocalFallback('Offline — showing local scores');
+                    }
+                }, 1500);
+
+                socket.addEventListener('open', () => {
+                    if (connectionTimeout) clearTimeout(connectionTimeout);
+                    socket.send(JSON.stringify({ type: 'get_leaderboard' }));
+                });
+
+                socket.addEventListener('message', (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        if (message.type === 'leaderboard_data') {
+                            const merged = mergeAndSortLeaderboards(message.data, localScores);
+                            renderLeaderboard(merged);
+                            if (statusMsg) statusMsg.style.display = 'none';
+                            socket.close();
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        useLocalFallback('Failed to load server scores');
+                    }
+                });
+
+                socket.addEventListener('error', () => {
+                    useLocalFallback('Offline — showing local scores');
+                });
+            } catch (e) {
                 useLocalFallback('Offline — showing local scores');
             }
-        }, 1500);
-
-        socket.addEventListener('open', () => {
-            if (connectionTimeout) clearTimeout(connectionTimeout);
-            socket.send(JSON.stringify({ type: 'get_leaderboard' }));
         });
-
-        socket.addEventListener('message', (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                if (message.type === 'leaderboard_data') {
-                    const merged = mergeAndSortLeaderboards(message.data, localScores);
-                    renderLeaderboard(merged);
-                    if (statusMsg) statusMsg.style.display = 'none';
-                    socket.close();
-                }
-            } catch (e) {
-                console.error(e);
-                useLocalFallback('Failed to load server scores');
-            }
-        });
-
-        socket.addEventListener('error', () => {
-            useLocalFallback('Offline — showing local scores');
-        });
-    } catch (e) {
-        useLocalFallback('Offline — showing local scores');
-    }
 }
+
+// Global leaderboard share functions (Requirement 8)
+window._leaderboardShareTwitter = function() {
+    const text = encodeURIComponent(`Check out the Crownfall High Scores leaderboard! Can you beat the top champions? ⚔️🛡️`);
+    const shareUrl = `https://twitter.com/intent/tweet?text=${text}&hashtags=Crownfall,ThreeJS,Gaming`;
+    window.open(shareUrl, '_blank', 'width=600,height=400');
+};
+
+window._leaderboardShareFacebook = function() {
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.origin)}`;
+    window.open(shareUrl, '_blank', 'width=600,height=400');
+};
 
 function renderLeaderboard(data) {
     const tbody = document.getElementById('leaderboard-body');

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "DragonSlayer",
+    "mode": "Arena",
+    "score": 15420,
+    "date": "05/01"
+  },
+  {
+    "name": "ShadowHunter",
+    "mode": "Arena",
+    "score": 14850,
+    "date": "05/02"
+  },
+  {
+    "name": "IronWarrior",
+    "mode": "Arena",
+    "score": 13990,
+    "date": "05/02"
+  },
+  {
+    "name": "StormBringer",
+    "mode": "Arena",
+    "score": 13200,
+    "date": "05/03"
+  },
+  {
+    "name": "NightRaven",
+    "mode": "Arena",
+    "score": 12750,
+    "date": "05/04"
+  },
+  {
+    "name": "Player",
+    "score": 500,
+    "mode": "Arena",
+    "date": "05/19"
+  }
+]
