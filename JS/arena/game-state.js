@@ -71,6 +71,8 @@ playerRoot.add(playerCollider);
 const urlParams = new URLSearchParams(window.location.search);
 export const selectedMap = urlParams.get('map') || 'city';
 export const selectedDifficulty = urlParams.get('difficulty') || 'medium';
+// 0 = infinite, otherwise stop after this wave number
+export const maxWaves = parseInt(urlParams.get('maxWaves') || '0', 10);
 
 // ── Config objects ────────────────────────────────────────────
 export const movementConfig = {
@@ -161,7 +163,7 @@ export const speedPowerupState = {
 
 export const gameState = {
     score: 0, elapsedSeconds: 0, timerRunning: true, isPaused: false,
-    isPlayerDead: false, currentWave: 0, currentWaveTargetKills: 0,
+    isPlayerDead: false, isVictory: false, currentWave: 0, currentWaveTargetKills: 0,
     currentWaveKills: 0, currentWaveSpawned: 0, waveSpawnCursor: 0,
     pendingWaveStart: true, waveDelayRemaining: 15, isWaveSpawning: false,
 };

@@ -8,6 +8,7 @@ import {
     settingsButtonElement, menuButtonElement, closeSettingsButtonElement,
     backToGameButtonElement, retryButtonElement, deathMenuButtonElement,
     deathTimeElement, deathWaveElement, deathScoreElement,
+    victoryOverlayElement, victoryRetryButtonElement, victoryMenuButtonElement,
     formatHudTime, updateWeaponHudValues, updateVitalsHud, updateTimeHud,
 } from './hud.js';
 import {
@@ -117,6 +118,11 @@ export function setupPauseMenuListeners() {
 export function setupDeathScreenListeners() {
     retryButtonElement?.addEventListener('click', () => window.location.reload());
     deathMenuButtonElement?.addEventListener('click', () => {
+        leaveMultiplayerArenaSession('Returning to main menu');
+        setTimeout(() => { window.location.href = 'mainmenu.html'; }, 80);
+    });
+    victoryRetryButtonElement?.addEventListener('click', () => window.location.reload());
+    victoryMenuButtonElement?.addEventListener('click', () => {
         leaveMultiplayerArenaSession('Returning to main menu');
         setTimeout(() => { window.location.href = 'mainmenu.html'; }, 80);
     });
@@ -287,9 +293,17 @@ export function attachInputHandlers(utilityPickups, weaponPickups, multiplayerSt
 
     window.addEventListener('resize', handleResize);
 
-    // Expose to game state for modules that need it via globals
     window._arenaMouseState = mouseState;
     window._arenaPlayerState = playerState;
     window._arenaHandlePlayerDeath = handlePlayerDeath;
     window._arenaApplyDamageToPlayer = applyDamageToPlayer;
+    window._arenaStopPlayerLoops = () => {
+        pressedKeys.clear();
+        mouseState.isAimPressed = false;
+        mouseState.isFirePressed = false;
+        mouseState.hasSemiShotQueued = false;
+        playerState.hasJumpQueued = false;
+        stopPlayerRifleLoopSound();
+        stopPlayerFootstepSound();
+    };
 }

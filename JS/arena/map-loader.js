@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene, loader, EXRLoader, renderer, FLOOR_Y_OFFSET, selectedMap } from './game-state.js';
-import { registerGroundRoot, registerCollisionRoot, registerGroundMesh } from './collision.js';
+import { registerGroundRoot, registerCollisionRoot, registerGroundMesh, registerCollisionMesh } from './collision.js';
 
 export function setShadowProperties(object) {
     object.traverse((child) => {
@@ -85,11 +85,69 @@ export function createEnvironment() {
     scene.add(grid);
 }
 
+// ── Boundary fence auto-detection ────────────────────────────
+// Flat fence meshes (aspect ratio > 6:1) can't be used as direct colliders
+// because the player spawns inside them. Instead we build 4 invisible
+// vertical walls at the perimeter edges so the player is contained inside.
+function createBoundaryWallsFromFence(mesh) {
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    const cx = (worldBox.min.x + worldBox.max.x) / 2;
+    const cz = (worldBox.min.z + worldBox.max.z) / 2;
+    const sizeX = worldBox.max.x - worldBox.min.x;
+    const sizeZ = worldBox.max.z - worldBox.min.z;
+    const wallThick = 0.6;
+    const wallHeight = 4.0;
+    const baseY = worldBox.min.y + wallHeight / 2;
+    const wallMat = new THREE.MeshBasicMaterial({ visible: false });
+
+    [
+        // [posX, posY, posZ, scaleX, scaleZ]  — N / S / E / W walls
+        [cx,               baseY, worldBox.max.z, sizeX + wallThick * 2, wallThick],
+        [cx,               baseY, worldBox.min.z, sizeX + wallThick * 2, wallThick],
+        [worldBox.max.x,   baseY, cz,             wallThick,             sizeZ],
+        [worldBox.min.x,   baseY, cz,             wallThick,             sizeZ],
+    ].forEach(([px, py, pz, sx, sz]) => {
+        const wall = new THREE.Mesh(
+            new THREE.BoxGeometry(sx, wallHeight, sz),
+            wallMat.clone(),
+        );
+        wall.name = '_boundary_wall';
+        wall.position.set(px, py, pz);
+        scene.add(wall);
+        registerCollisionMesh(wall);
+    });
+
+    console.log(`[BoundaryFence] Created 4 walls for "${mesh.name}" (${Math.round(sizeX)}×${Math.round(sizeZ)})`);
+}
+
+function registerBoundaryFencesInMap(root) {
+    root.traverse((child) => {
+        if (!child.isMesh || !child.geometry) return;
+        const name = String(child.name || '').toLowerCase();
+        // Only process meshes with "fence" in the name
+        if (!name.includes('fence')) return;
+        if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+        const b = child.geometry.boundingBox;
+        const ws = new THREE.Vector3();
+        child.getWorldScale(ws);
+        const ww = Math.abs(b.max.x - b.min.x) * Math.abs(ws.x);
+        const wh = Math.abs(b.max.y - b.min.y) * Math.abs(ws.y);
+        const wd = Math.abs(b.max.z - b.min.z) * Math.abs(ws.z);
+        const maxH = Math.max(ww, wd);
+        const floorAspect = maxH / Math.max(wh, 0.001);
+        // Only flat perimeter fences (wide & thin)
+        if (floorAspect > 6 && wh < 2.0) {
+            createBoundaryWallsFromFence(child);
+        }
+    });
+}
+
 export async function loadArenaMap(modelPath = '../Maps/arena_city.glb', options = {}) {
     const {
         registerGround = true,
         registerColliders = false,
         colliderFilter = (m) => Boolean(m.userData.collider) || /collider|wall|block|obstacle/i.test(m.name),
+        registerBoundaries = true,
     } = options;
     try {
         const gltf = await loader.loadAsync(modelPath);
@@ -100,6 +158,7 @@ export async function loadArenaMap(modelPath = '../Maps/arena_city.glb', options
         scene.add(map);
         if (registerGround) registerGroundRoot(map);
         if (registerColliders) registerCollisionRoot(map, { filter: colliderFilter });
+        if (registerBoundaries) registerBoundaryFencesInMap(map);
         return gltf;
     } catch (e) {
         console.warn('Arena map could not be loaded, using fallback.', e);
@@ -110,11 +169,14 @@ export async function loadArenaMap(modelPath = '../Maps/arena_city.glb', options
 export function shouldUseAsMapCollider(mesh) {
     if (!mesh || !mesh.isMesh || !mesh.geometry) return false;
     const name = String(mesh.name || '').toLowerCase();
-    const include = ['collider','wall','building','house','tower','block','obstacle','barrier','fence','gate','garage','hangar','container','pillar'];
+
+    // Always exclude sky, sky-like, and ground/floor meshes by name
     const exclude = ['ground','floor','road','street','sidewalk','terrain','grass','decal','water','cloud','light','lamp','particle','fx','plane','helper','fountain','pool','basin','pond'];
     const hasSky = /(^|[^a-z0-9])sky([^a-z0-9]|$)/i.test(name) || name.includes('skybox') || name.includes('skydome');
     if (hasSky || exclude.some((h) => name.includes(h))) return false;
-    if (include.some((h) => name.includes(h))) return true;
+
+    // Compute world-space dimensions FIRST — this lets us veto flat meshes
+    // even when their name matches the include list (e.g. a 57×0.7×57 "fence" perimeter).
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
     const b = mesh.geometry.boundingBox;
     if (!b) return false;
@@ -123,8 +185,19 @@ export function shouldUseAsMapCollider(mesh) {
     const lw = Math.abs(b.max.x - b.min.x), lh = Math.abs(b.max.y - b.min.y), ld = Math.abs(b.max.z - b.min.z);
     const ww = lw * Math.abs(ws.x), wh = lh * Math.abs(ws.y), wd = ld * Math.abs(ws.z);
     const maxH = Math.max(ww, wd), minH = Math.min(ww, wd);
+
+    // Reject very thin meshes (horizontal planes, decals, etc.)
     if (wh < 0.45) return false;
-    if (maxH < 0.45 && wh < 1.1) return false;
+    // Reject wide flat planes (floor slabs, perimeter fences, terrain borders):
+    // when horizontal span is 6× larger than vertical height AND height < 2 m, it's a ground-plane.
+    const floorAspect = maxH / Math.max(wh, 0.001);
+    if (floorAspect > 6 && wh < 2.0) return false;
+
+    // Now safe to check by name — flat meshes already vetoed above
+    const include = ['collider','wall','building','house','tower','block','obstacle','barrier','fence','gate','garage','hangar','container','pillar','stable','inn','market','storage'];
+    if (include.some((h) => name.includes(h))) return true;
+
+    // Generic size-based inclusion for meshes with non-descriptive names
     if (wh >= 1.2 && minH >= 0.2) return true;
     if (maxH >= 2.2 && wh >= 0.35) return true;
     return false;

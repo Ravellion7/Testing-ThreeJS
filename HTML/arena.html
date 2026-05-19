@@ -146,6 +146,32 @@
             </div>
         </div>
     </div>
+
+    <!-- VICTORY SCREEN -->
+    <div class="death-overlay" id="victory-overlay" style="background: rgba(14, 120, 30, 0.25);">
+        <div class="death-screen" style="border-color: rgba(80,220,100,0.45); box-shadow: 0 0 60px rgba(50,200,80,0.25), inset 0 0 40px rgba(50,200,80,0.05); background: linear-gradient(135deg, rgba(12, 30, 15, 0.95) 0%, rgba(16, 45, 20, 0.95) 50%, rgba(12, 30, 15, 0.95) 100%);">
+            <h1 class="death-title" style="color:#50dc64; text-shadow: 0 0 30px rgba(80,220,100,0.7);">VICTORIA</h1>
+            <p class="death-subtitle" style="color:#a8f0b0; font-size: 1.2em; margin-bottom: 20px; letter-spacing: 2px; text-transform: uppercase;">¡Completaste todas las rondas!</p>
+            <div class="death-stats">
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Rondas completadas:</span>
+                    <span class="death-stat-value" id="victory-wave" style="color: #50dc64;">Wave 1</span>
+                </div>
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Tiempo total:</span>
+                    <span class="death-stat-value" id="victory-time" style="color: #50dc64;">00:00</span>
+                </div>
+                <div class="death-stat-row" style="background: rgba(10, 20, 12, 0.6); border-color: #356b40;">
+                    <span class="death-stat-label">Puntuación final:</span>
+                    <span class="death-stat-value" id="victory-score" style="color: #50dc64;">0</span>
+                </div>
+            </div>
+            <div class="death-buttons">
+                <button class="death-btn retry-btn" id="victory-retry-btn" style="border-color: #356b40; color: #50dc64; background: rgba(10, 30, 15, 0.6);">Jugar de nuevo</button>
+                <button class="death-btn death-menu-btn" id="victory-menu-btn" style="border-color: #356b40; color: #50dc64; background: rgba(10, 30, 15, 0.6);">Menú Principal</button>
+            </div>
+        </div>
+    </div>
     
     <!-- IN-GAME SETTINGS MODAL -->
     <div class="ingame-settings-overlay" id="ingame-settings-overlay">

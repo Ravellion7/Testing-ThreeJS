@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let matchIsMultiplayer = false;
     let selectedMap = 'city';
     let selectedDifficulty = 'medium';
+    let selectedDuration = 10; // default Wave 10
 
     const matchModal = document.getElementById('match-modal');
     const modalClose = document.getElementById('modal-close');
@@ -143,6 +144,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset selections to defaults
         selectedMap = 'city';
         selectedDifficulty = 'medium';
+        selectedDuration = 10;
+        
+        // Reset duration dropdown
+        const durationSelect = document.getElementById('duration-select');
+        if (durationSelect) durationSelect.value = '10';
         
         mapCards.forEach(c => c.classList.remove('active'));
         const defaultCard = document.querySelector('.map-card[data-map="city"]');
@@ -163,9 +169,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function launchMatch() {
-        let url = `arena.html?map=${selectedMap}&difficulty=${selectedDifficulty}`;
+        const durationSelect = document.getElementById('duration-select');
+        if (durationSelect) selectedDuration = parseInt(durationSelect.value, 10);
+        let url = `arena.html?map=${selectedMap}&difficulty=${selectedDifficulty}&maxWaves=${selectedDuration}`;
         if (matchIsMultiplayer) {
-            url = `arena.html?multiplayer=1&map=${selectedMap}&difficulty=${selectedDifficulty}`;
+            url = `arena.html?multiplayer=1&map=${selectedMap}&difficulty=${selectedDifficulty}&maxWaves=${selectedDuration}`;
         }
         
         playSelectSound();

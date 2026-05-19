@@ -33,6 +33,10 @@ export const deathWaveElement = document.getElementById('death-wave');
 export const deathScoreElement = document.getElementById('death-score');
 export const retryButtonElement = document.getElementById('retry-btn');
 export const deathMenuButtonElement = document.getElementById('death-menu-btn');
+export const victoryOverlayElement = document.getElementById('victory-overlay');
+export const victoryRetryButtonElement = document.getElementById('victory-retry-btn');
+export const victoryMenuButtonElement = document.getElementById('victory-menu-btn');
+
 
 // ── Formatters ────────────────────────────────────────────────
 export function formatHudTime(totalSeconds) {

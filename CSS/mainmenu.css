@@ -564,6 +564,37 @@ body::after {
     line-height: 1.2;
 }
 
+/* Duration Select */
+.duration-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(30, 22, 16, 0.7);
+    border: 2px solid #5a452a;
+    color: #d4c5a9;
+    font-family: 'Georgia', serif;
+    font-size: 1.05em;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.3s ease;
+    outline: none;
+    letter-spacing: 1px;
+}
+
+.duration-select:hover {
+    border-color: #8b6f47;
+    background: rgba(218, 165, 32, 0.05);
+}
+
+.duration-select:focus {
+    border-color: #daa520;
+    box-shadow: 0 0 10px rgba(218, 165, 32, 0.2);
+}
+
+.duration-select option {
+    background: #1a1410;
+    color: #d4c5a9;
+}
+
 .modal-footer {
     border-top: 2px solid #6b5435;
     padding-top: 20px;

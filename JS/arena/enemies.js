@@ -4,7 +4,7 @@ import {
     enemyConfig, waveConfig, gameState, playerRoot, playerCollider,
     collisionState, tempVectorA, tempVectorB, tempBox, upAxis,
     enemySightRaycaster, enemyShotRaycaster, bulletBlockerRaycaster,
-    FLOOR_Y_OFFSET, PLAYER_MODEL_Y_OFFSET, applyWeaponHoldTransform,
+    FLOOR_Y_OFFSET, PLAYER_MODEL_Y_OFFSET, applyWeaponHoldTransform, maxWaves,
 } from './game-state.js';
 import { updateEnemiesHud, updateWaveHud, updateNextWaveCountdownHud, addScore } from './hud.js';
 import { playPositionalOneShot, playRifleShotSoundForEnemy, playEmptyMagIfReady } from './audio.js';
@@ -344,6 +344,28 @@ export async function startNextWave() {
     updateEnemiesHud(); await spawnEnemiesForCurrentWave();
 }
 
+// ── Victory ───────────────────────────────────────────────────
+function triggerVictory() {
+    if (gameState.isVictory) return;
+    gameState.isVictory = true;
+    gameState.isPaused = true;
+    gameState.timerRunning = false;
+    document.exitPointerLock?.();
+    window._arenaStopPlayerLoops?.();
+
+    const screen = document.getElementById('victory-overlay');
+    if (screen) {
+        const mm = Math.floor(gameState.elapsedSeconds / 60);
+        const ss = Math.floor(gameState.elapsedSeconds % 60);
+        const timeStr = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+        const el = (id) => document.getElementById(id);
+        if (el('victory-score')) el('victory-score').textContent = gameState.score;
+        if (el('victory-wave'))  el('victory-wave').textContent  = `Wave ${gameState.currentWave}`;
+        if (el('victory-time'))  el('victory-time').textContent  = timeStr;
+        screen.classList.add('active');
+    }
+}
+
 export function updateWaveSystem(deltaSeconds, isMultiplayerArenaEnabled, multiplayerState) {
     if (isMultiplayerArenaEnabled() && multiplayerState.sharedArenaActive) { updateNextWaveCountdownHud(); return; }
     if (gameState.isPlayerDead || gameState.isWaveSpawning) { updateNextWaveCountdownHud(); return; }
@@ -360,8 +382,18 @@ export function updateWaveSystem(deltaSeconds, isMultiplayerArenaEnabled, multip
     const done = gameState.currentWaveKills >= gameState.currentWaveTargetKills && gameState.currentWaveSpawned >= gameState.currentWaveTargetKills;
     if (done) {
         if (alive > 0) return;
-        cleanupDeadEnemies(); gameState.pendingWaveStart = true;
-        gameState.waveDelayRemaining = waveConfig.intermissionDelaySeconds; updateNextWaveCountdownHud(); return;
+        cleanupDeadEnemies();
+
+        // ━━ Victory check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (maxWaves > 0 && gameState.currentWave >= maxWaves) {
+            triggerVictory();
+            return;
+        }
+
+        gameState.pendingWaveStart = true;
+        gameState.waveDelayRemaining = waveConfig.intermissionDelaySeconds;
+        updateNextWaveCountdownHud();
+        return;
     }
     updateNextWaveCountdownHud(); spawnEnemiesForCurrentWave();
 }

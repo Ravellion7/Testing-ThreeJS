@@ -91,13 +91,22 @@ export function resolveHorizontalCollisions(currentPosition, candidatePosition, 
             if (distSq >= rSq) return;
 
             if (distSq === 0) {
+                // Player is inside the mesh — push toward nearest edge, but cap the distance
+                // to prevent flying far out of the map (large environment boxes).
                 tempBox.getCenter(tempVectorA);
                 const px = resolved.x - tempVectorA.x;
                 const pz = resolved.z - tempVectorA.z;
+                const maxPush = movementConfig.capsuleRadius * 3;
                 if (Math.abs(px) > Math.abs(pz)) {
-                    resolved.x = px >= 0 ? tempBox.max.x + movementConfig.capsuleRadius : tempBox.min.x - movementConfig.capsuleRadius;
+                    const edge = px >= 0 ? tempBox.max.x : tempBox.min.x;
+                    const target = edge + (px >= 0 ? movementConfig.capsuleRadius : -movementConfig.capsuleRadius);
+                    const push = target - resolved.x;
+                    resolved.x += Math.sign(push) * Math.min(Math.abs(push), maxPush);
                 } else {
-                    resolved.z = pz >= 0 ? tempBox.max.z + movementConfig.capsuleRadius : tempBox.min.z - movementConfig.capsuleRadius;
+                    const edge = pz >= 0 ? tempBox.max.z : tempBox.min.z;
+                    const target = edge + (pz >= 0 ? movementConfig.capsuleRadius : -movementConfig.capsuleRadius);
+                    const push = target - resolved.z;
+                    resolved.z += Math.sign(push) * Math.min(Math.abs(push), maxPush);
                 }
                 return;
             }
