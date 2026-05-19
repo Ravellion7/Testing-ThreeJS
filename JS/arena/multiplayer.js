@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import {
     scene, loader, mixers, enemies, enemyHitMeshOwner,
     multiplayerState, multiplayerAssetCache, gameState, playerVitals,
@@ -375,3 +375,191 @@ export function submitLeaderboardScore(score, mode = 'Arena') {
         console.error('Failed to submit score to websocket server', e);
     }
 }
+
+// ── King of the Hill Multiplayer (PvP, up to 4 players) ───────────────────
+const kothRemoteAvatars = new Map();
+
+export const kothMultiplayerState = {
+    enabled: false, socket: null, playerId: null,
+    serverUrl: multiplayerState.serverUrl,
+    captureProgress: 0, capturingPlayerId: null, scores: {},
+    hillX: 0, hillZ: -5, hillRadius: 3.0,
+    _lastPoseSentAt: 0,
+};
+
+async function getOrCreateKothAvatar(playerId) {
+    if (kothRemoteAvatars.has(playerId)) return kothRemoteAvatars.get(playerId);
+    try {
+        const gltf = await loader.loadAsync('../Characters/player_SWAG.glb');
+        const root = gltf.scene;
+        root.position.set(0, FLOOR_Y_OFFSET, 0);
+        setShadowProperties(root);
+        scene.add(root);
+        const mixer = new THREE.AnimationMixer(root);
+        mixers.push(mixer);
+        const animMap = new Map();
+        gltf.animations.forEach((clip) => animMap.set(clip.name, mixer.clipAction(clip)));
+        const avatar = { root, mixer, animationActions: animMap, activeAction: null, weaponKind: 'none', health: 100 };
+        kothRemoteAvatars.set(playerId, avatar);
+        return avatar;
+    } catch { return null; }
+}
+
+function handleKothMessage(raw, weaponPickups, utilityPickups) {
+    let msg; try { msg = JSON.parse(raw); } catch { return; }
+    if (!msg || typeof msg !== 'object') return;
+
+    if (msg.type === 'koth_assigned') {
+        kothMultiplayerState.playerId = msg.playerId;
+        if (typeof msg.health === 'number') { playerVitals.health = Math.max(0, msg.health); }
+        if (typeof msg.shield === 'number') { playerVitals.shield = Math.max(0, msg.shield); }
+        updateVitalsHud();
+        const settings = getSavedSettings();
+        const nick = settings.nickname?.trim() || ('Player ' + (msg.playerId || '').replace(/\D/g, ''));
+        showMultiplayerAnnouncement(`Joined KOTH as <span style="color:#daa520;font-weight:bold">${nick}</span>`);
+        return;
+    }
+    if (msg.type === 'koth_player_joined') {
+        showMultiplayerAnnouncement(`<span style="color:#daa520;font-weight:bold">${msg.nickname || msg.playerId}</span> joined the hill`);
+        return;
+    }
+    if (msg.type === 'koth_player_disconnected') {
+        const av = kothRemoteAvatars.get(msg.playerId);
+        if (av) { av.root?.parent?.remove(av.root); kothRemoteAvatars.delete(msg.playerId); }
+        showMultiplayerAnnouncement(`<span style="color:#d9534f;font-weight:bold">${msg.nickname || msg.playerId}</span> left the hill`);
+        return;
+    }
+    if (msg.type === 'koth_player_eliminated') {
+        if (msg.playerId === kothMultiplayerState.playerId) {
+            window._arenaHandlePlayerDeath?.();
+            setTimeout(() => {
+                playerVitals.health = 100; playerVitals.shield = 100;
+                updateVitalsHud();
+                gameState.isPlayerDead = false;
+                document.getElementById('death-overlay')?.classList.remove('active');
+            }, 5000);
+        }
+        return;
+    }
+    if (msg.type === 'koth_shot_result') {
+        if (msg.targetId === kothMultiplayerState.playerId) {
+            if (typeof msg.targetHealth === 'number') playerVitals.health = Math.max(0, msg.targetHealth);
+            if (typeof msg.targetShield === 'number') playerVitals.shield = Math.max(0, msg.targetShield);
+            updateVitalsHud();
+        }
+        return;
+    }
+    if (msg.type === 'koth_room_full') {
+        showMultiplayerAnnouncement('<span style="color:#d9534f">KOTH room is full (4/4)</span>');
+        return;
+    }
+        if (msg.type === 'koth_hill_moved') {
+        kothMultiplayerState.hillX = msg.hillX ?? kothMultiplayerState.hillX;
+        kothMultiplayerState.hillZ = msg.hillZ ?? kothMultiplayerState.hillZ;
+        kothMultiplayerState.hillRadius = msg.hillRadius ?? kothMultiplayerState.hillRadius;
+        kothMultiplayerState.captureProgress = 0;
+        kothMultiplayerState.capturingPlayerId = null;
+        showMultiplayerAnnouncement('<span style="color:#daa520;font-weight:bold;letter-spacing:1px;">HILL MOVED! Find the new zone!</span>');
+        return;
+    }    if (msg.type === 'koth_state') {
+        if (typeof msg.captureProgress === 'number') kothMultiplayerState.captureProgress = msg.captureProgress;
+        kothMultiplayerState.capturingPlayerId = msg.capturingPlayerId || null;
+        if (Array.isArray(msg.weaponPickups)) {
+            msg.weaponPickups.forEach((ps) => { const e = weaponPickups.find((x) => x.id === ps.id); if (e) applyPickupActiveState(e, ps.active); });
+        }
+        if (Array.isArray(msg.utilityPickups)) {
+            msg.utilityPickups.forEach((ps) => { const e = utilityPickups.find((x) => x.id === ps.id); if (e) applyPickupActiveState(e, ps.active); });
+        }
+        if (!Array.isArray(msg.players)) return;
+        const remoteIds = new Set();
+        msg.players.forEach(async (snap) => {
+            if (snap.id === kothMultiplayerState.playerId) {
+                if (typeof snap.health === 'number') { playerVitals.health = Math.max(0, snap.health); }
+                if (typeof snap.shield === 'number') { playerVitals.shield = Math.max(0, snap.shield); }
+                updateVitalsHud();
+                kothMultiplayerState.scores[snap.id] = snap.score || 0;
+                gameState.score = snap.score || 0;
+                const scoreEl = document.getElementById('score');
+                if (scoreEl) scoreEl.textContent = String(gameState.score);
+                if (playerVitals.health <= 0 && !gameState.isPlayerDead) window._arenaHandlePlayerDeath?.();
+                return;
+            }
+            remoteIds.add(snap.id);
+            kothMultiplayerState.scores[snap.id] = snap.score || 0;
+            const avatar = await getOrCreateKothAvatar(snap.id);
+            if (!avatar?.root) return;
+            if (typeof snap.x === 'number') avatar.root.position.x = snap.x;
+            if (typeof snap.y === 'number') avatar.root.position.y = snap.y + PLAYER_MODEL_Y_OFFSET;
+            if (typeof snap.z === 'number') avatar.root.position.z = snap.z;
+            if (typeof snap.rotY === 'number') avatar.root.rotation.y = snap.rotY;
+            avatar.health = snap.health ?? 100;
+            const actionName = snap.actionName || (snap.moveSpeed > 0.5 ? (snap.moveSpeed > 4 ? 'RunGun' : 'WalkGun') : 'IdleGun');
+            const next = avatar.animationActions.get(actionName);
+            if (next && next !== avatar.activeAction) {
+                avatar.activeAction?.fadeOut(0.12);
+                next.reset().fadeIn(0.12).play();
+                avatar.activeAction = next;
+            }
+        });
+        kothRemoteAvatars.forEach((av, pid) => {
+            if (!remoteIds.has(pid)) { av.root?.parent?.remove(av.root); kothRemoteAvatars.delete(pid); }
+        });
+    }
+}
+
+export function connectKothArena(weaponPickups, utilityPickups, selectedMap) {
+    if (!('WebSocket' in window)) { console.warn('WebSocket not supported'); return; }
+    kothMultiplayerState.enabled = true;
+    let socket;
+    try { socket = new WebSocket(kothMultiplayerState.serverUrl); } catch { return; }
+    kothMultiplayerState.socket = socket;
+    multiplayerState.socket = socket;
+    socket.addEventListener('open', () => {
+        const settings = getSavedSettings();
+        socket.send(JSON.stringify({ type: 'join_koth', nickname: settings.nickname?.trim() || '', map: selectedMap || 'city' }));
+    });
+    socket.addEventListener('message', (ev) => handleKothMessage(ev.data, weaponPickups, utilityPickups));
+    socket.addEventListener('close', () => showMultiplayerAnnouncement('<span style="color:#888">Disconnected from KOTH server</span>'));
+    socket.addEventListener('error', () => showMultiplayerAnnouncement('<span style="color:#d9534f">KOTH connection error</span>'));
+    window.addEventListener('beforeunload', () => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'leave_koth' }));
+    }, { once: true });
+}
+
+export function sendKothPoseToServer(actionName) {
+    if (!kothMultiplayerState.enabled) return;
+    const s = kothMultiplayerState.socket;
+    if (!s || s.readyState !== WebSocket.OPEN || !kothMultiplayerState.playerId) return;
+    const now = performance.now();
+    if ((now - kothMultiplayerState._lastPoseSentAt) < 50) return;
+    kothMultiplayerState._lastPoseSentAt = now;
+    const { hasWeaponEquipped, equippedWeaponType, equippedWeapon } = weaponState;
+    const wKind = !hasWeaponEquipped || equippedWeaponType !== 'rifle' ? 'none'
+        : (String(equippedWeapon?.modelPath || '').toLowerCase().includes('m4') ? 'm4' : 'ak');
+    s.send(JSON.stringify({
+        type: 'koth_update_pose',
+        x: playerRoot.position.x, y: playerRoot.position.y, z: playerRoot.position.z,
+        rotY: playerRoot.rotation.y,
+        moveSpeed: Math.hypot(playerState.velocity.x, playerState.velocity.z),
+        aiming: mouseState.isAimPressed && hasWeaponEquipped && equippedWeaponType === 'rifle',
+        firing: Boolean(mouseState.isFirePressed && hasWeaponEquipped && equippedWeaponType === 'rifle'),
+        reloading: Boolean(weaponState.isReloadAnimating),
+        weaponKind: wKind,
+        actionName: actionName || '',
+    }));
+}
+
+export function notifyKothRifleShot(direction) {
+    if (!kothMultiplayerState.enabled) return;
+    const s = kothMultiplayerState.socket;
+    if (!s || s.readyState !== WebSocket.OPEN || !kothMultiplayerState.playerId) return;
+    s.send(JSON.stringify({ type: 'koth_rifle_shot', playerId: kothMultiplayerState.playerId, dirX: direction?.x, dirZ: direction?.z }));
+}
+
+export function notifyKothPickupCollect(entry, category) {
+    if (!entry?.id || !category || !kothMultiplayerState.enabled) return;
+    const s = kothMultiplayerState.socket;
+    if (!s || s.readyState !== WebSocket.OPEN) return;
+    s.send(JSON.stringify({ type: 'koth_pickup_collect', category, id: entry.id }));
+}
+

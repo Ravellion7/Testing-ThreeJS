@@ -7,6 +7,7 @@ const THREE = require('three');
 const PORT = process.env.PORT || 8080;
 const TICK_RATE = 20;
 const MAX_PLAYERS = 2;
+const MAX_KOTH_PLAYERS = 4;
 
 const FLOOR_Y = -0.12;
 const PLAYER_BASE_HEALTH = 100;
@@ -115,6 +116,48 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocket.Server({ server });
 const players = new Map();
+// Hill zone positions spread around the map (x, z)
+const KOTH_HILL_POSITIONS = [
+  { x:  0,   z: -5  },   // centre
+  { x: -14,  z: -10 },   // left flank
+  { x:  14,  z: -10 },   // right flank
+  { x:   0,  z:  14 },   // back-field
+  { x: -10,  z:   8 },   // left back
+  { x:  10,  z:   8 },   // right back
+];
+const KOTH_HILL_RADIUS = 3.0;
+
+// ── King of the Hill room (separate from Arena, up to 4 players, PvP) ────
+const kothPlayers = new Map();
+const kothState = {
+  captureProgress: 0,   // 0-100
+  capturingPlayerId: null,
+  hillPositionIndex: 0,
+  get hillX() { return KOTH_HILL_POSITIONS[this.hillPositionIndex].x; },
+  get hillZ() { return KOTH_HILL_POSITIONS[this.hillPositionIndex].z; },
+  hillRadius: KOTH_HILL_RADIUS,
+  weaponPickups: WEAPON_PICKUPS.map((e) => ({ ...e, active: true, respawnRemaining: 0 })),
+  utilityPickups: UTILITY_PICKUPS.map((e) => ({ ...e, active: true, respawnRemaining: 0 })),
+};
+
+function relocateKothHill() {
+  const current = kothState.hillPositionIndex;
+  let next = current;
+  // Pick a different index at random
+  while (next === current) {
+    next = Math.floor(Math.random() * KOTH_HILL_POSITIONS.length);
+  }
+  kothState.hillPositionIndex = next;
+  kothState.captureProgress = 0;
+  kothState.capturingPlayerId = null;
+  broadcastKothJson({
+    type: 'koth_hill_moved',
+    hillX: kothState.hillX,
+    hillZ: kothState.hillZ,
+    hillRadius: kothState.hillRadius,
+  });
+}
+
 const colliderTempA = new THREE.Vector3();
 const colliderTempB = new THREE.Vector3();
 const arenaColliderState = {
@@ -197,6 +240,44 @@ function getFreePlayerId() {
   if (![...players.values()].find((p) => p.id === 'p1')) return 'p1';
   if (![...players.values()].find((p) => p.id === 'p2')) return 'p2';
   return null;
+}
+
+function getFreeKothPlayerId() {
+  const taken = new Set([...kothPlayers.values()].map((p) => p.id));
+  for (let i = 1; i <= MAX_KOTH_PLAYERS; i++) {
+    const id = 'kp' + i;
+    if (!taken.has(id)) return id;
+  }
+  return null;
+}
+
+function broadcastKothJson(payload) {
+  const data = JSON.stringify(payload);
+  kothPlayers.forEach((_player, socket) => {
+    if (socket.readyState === WebSocket.OPEN) socket.send(data);
+  });
+}
+
+function sendKothState() {
+  const playersSnap = [...kothPlayers.values()].map((p) => ({
+    id: p.id, x: p.x, y: p.y, z: p.z, rotY: p.rotY,
+    health: p.health, shield: p.shield,
+    moveSpeed: p.moveSpeed, aiming: p.aiming, firing: p.firing,
+    reloading: p.reloading, weaponKind: p.weaponKind, actionName: p.actionName,
+    speedBoostRemaining: p.speedBoostRemaining, nickname: p.nickname,
+    score: p.score,
+  }));
+  broadcastKothJson({
+    type: 'koth_state',
+    players: playersSnap,
+    captureProgress: kothState.captureProgress,
+    capturingPlayerId: kothState.capturingPlayerId,
+    hillX: kothState.hillX,
+    hillZ: kothState.hillZ,
+    hillRadius: kothState.hillRadius,
+    weaponPickups: kothState.weaponPickups.map((e) => ({ id: e.id, active: e.active })),
+    utilityPickups: kothState.utilityPickups.map((e) => ({ id: e.id, active: e.active })),
+  });
 }
 
 function sendJson(socket, payload) {
@@ -614,6 +695,57 @@ function handleRifleShot(player, message) {
     }
   });
 
+  // Also check if we hit other players (Requirement 11 & Free-for-All mode)
+  let targetPlayer = null;
+  let targetDistance = Number.POSITIVE_INFINITY;
+  
+  players.forEach((otherPlayer) => {
+    if (otherPlayer.id === player.id || otherPlayer.health <= 0) return;
+    
+    const toPlayerX = otherPlayer.x - player.x;
+    const toPlayerZ = otherPlayer.z - player.z;
+    const dist = Math.hypot(toPlayerX, toPlayerZ);
+    if (dist <= 0.0001 || dist > MAX_RIFLE_RANGE) return;
+    
+    const towardX = toPlayerX / dist;
+    const towardZ = toPlayerZ / dist;
+    const dot = (dirX * towardX) + (dirZ * towardZ);
+    if (dot < HIT_CONE_DOT) return;
+    
+    if (dist < targetDistance) {
+      targetDistance = dist;
+      targetPlayer = otherPlayer;
+    }
+  });
+
+  // If we hit a player, resolve player-to-player damage!
+  if (targetPlayer && targetDistance < selectedDistance) {
+    let dmg = RIFLE_DAMAGE;
+    const shieldDmg = Math.min(targetPlayer.shield, dmg);
+    targetPlayer.shield -= shieldDmg;
+    dmg -= shieldDmg;
+    if (dmg > 0) targetPlayer.health = Math.max(0, targetPlayer.health - dmg);
+
+    // Send shot result to everyone to render tracers/announce hit
+    broadcastJson({
+      type: 'rifle_shot_result',
+      shooterId: player.id,
+      targetId: targetPlayer.id,
+      targetHealth: targetPlayer.health,
+      targetShield: targetPlayer.shield,
+      damage: RIFLE_DAMAGE,
+    });
+
+    if (targetPlayer.health <= 0) {
+      broadcastJson({
+        type: 'player_eliminated',
+        playerId: targetPlayer.id,
+        killerId: player.id,
+      });
+    }
+    return;
+  }
+
   if (selectedEnemy) {
     applyDamageToEnemy(selectedEnemy, RIFLE_DAMAGE);
   }
@@ -693,6 +825,157 @@ wss.on('connection', (socket) => {
       return;
     }
 
+    // ── King of the Hill join ─────────────────────────────────────
+    if (message.type === 'join_koth') {
+      if (kothPlayers.size >= MAX_KOTH_PLAYERS) {
+        sendJson(socket, { type: 'koth_room_full', message: 'KOTH room is full (4/4 players).' });
+        return;
+      }
+      const kid = getFreeKothPlayerId();
+      if (!kid) {
+        sendJson(socket, { type: 'koth_room_full', message: 'KOTH room is full.' });
+        return;
+      }
+      socket.kothPlayerId = kid;
+      socket.isKothPlayer = true;
+      const spawnOffsets = [[-3,0,0],[3,0,0],[0,0,-3],[0,0,3]];
+      const spawnIdx = parseInt(kid.replace('kp','')) - 1;
+      const [sx,,sz] = spawnOffsets[spawnIdx] || [0,0,0];
+      const kp = {
+        id: kid, nickname: (message.nickname?.trim()) || ('Player ' + kid.replace(/\D/g,'')),
+        x: sx, y: FLOOR_Y, z: sz, rotY: 0,
+        health: PLAYER_BASE_HEALTH, shield: PLAYER_BASE_SHIELD,
+        lastShotAt: 0, moveSpeed: 0, aiming: false, firing: false,
+        reloading: false, weaponKind: 'none', actionName: '',
+        speedBoostRemaining: 0, score: 0,
+      };
+      kothPlayers.set(socket, kp);
+      sendJson(socket, {
+        type: 'koth_assigned',
+        playerId: kid,
+        health: PLAYER_BASE_HEALTH,
+        shield: PLAYER_BASE_SHIELD,
+        map: message.map || 'city',
+      });
+      broadcastKothJson({ type: 'koth_player_joined', playerId: kid, nickname: kp.nickname });
+      sendKothState();
+      return;
+    }
+
+    // ── KOTH pose update ─────────────────────────────────────────
+    if (message.type === 'koth_update_pose') {
+      const kp = kothPlayers.get(socket);
+      if (!kp) return;
+      if (typeof message.x === 'number') kp.x = message.x;
+      if (typeof message.y === 'number') kp.y = message.y;
+      if (typeof message.z === 'number') kp.z = message.z;
+      if (typeof message.rotY === 'number') kp.rotY = message.rotY;
+      if (typeof message.moveSpeed === 'number') kp.moveSpeed = Math.max(0, message.moveSpeed);
+      if (typeof message.aiming === 'boolean') kp.aiming = message.aiming;
+      if (typeof message.firing === 'boolean') kp.firing = message.firing;
+      if (typeof message.reloading === 'boolean') kp.reloading = message.reloading;
+      if (typeof message.weaponKind === 'string') kp.weaponKind = message.weaponKind;
+      if (typeof message.actionName === 'string') kp.actionName = message.actionName;
+      // Capture zone tracking (server-authoritative progress)
+      const hillX = kothState.hillX, hillZ = kothState.hillZ, hillRadius = kothState.hillRadius;
+      const distToHill = Math.hypot(kp.x - hillX, kp.z - hillZ);
+      const inHill = distToHill < hillRadius;
+      // Find if any OTHER koth player is also in the hill (contested)
+      const othersInHill = [...kothPlayers.values()].filter((other) => {
+        if (other.id === kp.id) return false;
+        return Math.hypot(other.x - hillX, other.z - hillZ) < hillRadius;
+      });
+      if (inHill && othersInHill.length === 0) {
+        // Award points and advance capture while sole holder
+        kp.score += 5;
+        kothState.capturingPlayerId = kp.id;
+        kothState.captureProgress = Math.min(100, kothState.captureProgress + 0.25);
+        // When fully captured, relocate hill to a new random position
+        if (kothState.captureProgress >= 100) {
+          relocateKothHill();
+        }
+      } else if (kothState.capturingPlayerId === kp.id && (!inHill || othersInHill.length > 0)) {
+        kothState.capturingPlayerId = null;
+      }
+      return;
+    }
+
+    // ── KOTH rifle shot (PvP only) ────────────────────────────────
+    if (message.type === 'koth_rifle_shot') {
+      const shooter = kothPlayers.get(socket);
+      if (!shooter || shooter.health <= 0) return;
+      const now = Date.now();
+      if (now - shooter.lastShotAt < MIN_SHOT_INTERVAL_MS) return;
+      shooter.lastShotAt = now;
+      const dirXRaw = Number(message.dirX), dirZRaw = Number(message.dirZ);
+      let dirX = Math.sin(shooter.rotY), dirZ = Math.cos(shooter.rotY);
+      if (Number.isFinite(dirXRaw) && Number.isFinite(dirZRaw)) {
+        const len = Math.hypot(dirXRaw, dirZRaw);
+        if (len > 0.0001) { dirX = dirXRaw / len; dirZ = dirZRaw / len; }
+      }
+      let bestTarget = null, bestDist = Number.POSITIVE_INFINITY;
+      kothPlayers.forEach((other, _sock) => {
+        if (other.id === shooter.id || other.health <= 0) return;
+        const dx = other.x - shooter.x, dz = other.z - shooter.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist <= 0.0001 || dist > MAX_RIFLE_RANGE) return;
+        const dot = (dirX * dx/dist) + (dirZ * dz/dist);
+        if (dot < HIT_CONE_DOT) return;
+        if (dist < bestDist) { bestDist = dist; bestTarget = other; }
+      });
+      if (bestTarget) {
+        applyDamageToPlayer(bestTarget, RIFLE_DAMAGE);
+        broadcastKothJson({
+          type: 'koth_shot_result',
+          shooterId: shooter.id,
+          targetId: bestTarget.id,
+          targetHealth: bestTarget.health,
+          targetShield: bestTarget.shield,
+        });
+        if (bestTarget.health <= 0) {
+          shooter.score += 50; // Kill bonus
+          broadcastKothJson({ type: 'koth_player_eliminated', playerId: bestTarget.id, killerId: shooter.id });
+          // Respawn dead player after 5 seconds with full health
+          setTimeout(() => {
+            if (bestTarget) { bestTarget.health = PLAYER_BASE_HEALTH; bestTarget.shield = PLAYER_BASE_SHIELD; }
+          }, 5000);
+        }
+      }
+      return;
+    }
+
+    // ── KOTH pickup collect ───────────────────────────────────────
+    if (message.type === 'koth_pickup_collect') {
+      const kp = kothPlayers.get(socket);
+      if (!kp) return;
+      const category = message.category;
+      const list = category === 'weapon' ? kothState.weaponPickups : kothState.utilityPickups;
+      if (!list) return;
+      const entry = list.find((p) => p.id === message.id);
+      if (!entry || !entry.active) return;
+      if (Math.hypot(kp.x - entry.x, kp.z - entry.z) > 2.5) return;
+      entry.active = false;
+      entry.respawnRemaining = Math.max(3, Number(entry.respawnSeconds) || 20);
+      if (category === 'weapon' && entry.kind) kp.weaponKind = entry.kind;
+      if (category === 'utility') {
+        if (entry.type === 'medkit') kp.health = Math.min(125, kp.health + 25);
+        if (entry.type === 'shield') kp.shield = Math.min(125, kp.shield + 25);
+        if (entry.type === 'thunder') kp.speedBoostRemaining = Math.max(kp.speedBoostRemaining, SPEED_BOOST_DURATION);
+      }
+      return;
+    }
+
+    // ── KOTH leave ────────────────────────────────────────────────
+    if (message.type === 'leave_koth') {
+      const kp = kothPlayers.get(socket);
+      kothPlayers.delete(socket);
+      socket.isKothPlayer = false;
+      if (kp) broadcastKothJson({ type: 'koth_player_disconnected', playerId: kp.id, nickname: kp.nickname || kp.id });
+      sendKothState();
+      return;
+    }
+
+    // ── Arena join ────────────────────────────────────────────────
     if (message.type === 'join_arena') {
       if (players.size >= MAX_PLAYERS) {
         sendJson(socket, { type: 'room_full', message: 'Arena room already has 2 players.' });
@@ -808,6 +1091,14 @@ wss.on('connection', (socket) => {
   });
 
   socket.on('close', () => {
+    // Handle KOTH disconnect
+    const kp = kothPlayers.get(socket);
+    if (kp) {
+      kothPlayers.delete(socket);
+      broadcastKothJson({ type: 'koth_player_disconnected', playerId: kp.id, nickname: kp.nickname || kp.id });
+      sendKothState();
+    }
+    // Handle Arena disconnect
     const player = players.get(socket);
     players.delete(socket);
     if (player) {
@@ -817,7 +1108,6 @@ wss.on('connection', (socket) => {
         nickname: player.nickname || ('Player ' + player.id.replace(/\D/g, ''))
       });
     }
-
     if (players.size < MAX_PLAYERS) {
       resetArenaState();
       broadcastJson(buildArenaSnapshot());
@@ -830,17 +1120,26 @@ loadArenaColliders();
 setInterval(() => {
   const dtSeconds = 1 / TICK_RATE;
 
+  // ── Arena tick ────────────────────────────────────────────────
   players.forEach((player) => {
     player.speedBoostRemaining = Math.max(0, (player.speedBoostRemaining || 0) - dtSeconds);
   });
-
   updatePickupRespawns(worldState.weaponPickups, dtSeconds);
   updatePickupRespawns(worldState.utilityPickups, dtSeconds);
   updateWave(dtSeconds);
   updateEnemies(dtSeconds);
-
   broadcastJson({ type: 'state_update', players: activePlayers() });
   broadcastJson(buildArenaSnapshot());
+
+  // ── KOTH tick ────────────────────────────────────────────────
+  if (kothPlayers.size > 0) {
+    kothPlayers.forEach((kp) => {
+      kp.speedBoostRemaining = Math.max(0, (kp.speedBoostRemaining || 0) - dtSeconds);
+    });
+    updatePickupRespawns(kothState.weaponPickups, dtSeconds);
+    updatePickupRespawns(kothState.utilityPickups, dtSeconds);
+    sendKothState();
+  }
 }, 1000 / TICK_RATE);
 
 setInterval(() => {
