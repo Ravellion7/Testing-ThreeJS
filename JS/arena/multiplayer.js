@@ -338,13 +338,40 @@ export function notifyServerPickupCollect(entry, category) {
     s.send(JSON.stringify({ type: 'pickup_collect', playerId: multiplayerState.playerId, category, id: entry.id }));
 }
 
-export function submitLeaderboardScore(score) {
+export function submitLeaderboardScore(score, mode = 'Arena') {
     const settings = getSavedSettings();
     const nick = settings.nickname?.trim() || 'Player';
-    const payload = { type: 'submit_score', name: nick, mode: 'Arena', score };
-    if (multiplayerState.socket?.readyState === WebSocket.OPEN) { multiplayerState.socket.send(JSON.stringify(payload)); return; }
+    
+    // Save to localStorage (Local database fallback)
+    try {
+        const today = new Date();
+        const dateStr = String(today.getMonth() + 1).padStart(2, '0') + '/' + String(today.getDate()).padStart(2, '0');
+        const localDataRaw = localStorage.getItem('crownfall_leaderboard');
+        let localData = [];
+        if (localDataRaw) {
+            try { localData = JSON.parse(localDataRaw); } catch { localData = []; }
+        }
+        if (!Array.isArray(localData)) localData = [];
+        localData.push({ name: nick, mode: mode, score: Number(score) || 0, date: dateStr });
+        localData.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        const topLocal = localData.slice(0, 50);
+        localStorage.setItem('crownfall_leaderboard', JSON.stringify(topLocal));
+    } catch (e) {
+        console.error('Failed to save local score to localStorage:', e);
+    }
+
+    const payload = { type: 'submit_score', name: nick, mode: mode, score };
+    if (multiplayerState.socket?.readyState === WebSocket.OPEN) {
+        multiplayerState.socket.send(JSON.stringify(payload));
+        return;
+    }
     try {
         const ws = new WebSocket(multiplayerState.serverUrl);
-        ws.addEventListener('open', () => { ws.send(JSON.stringify(payload)); setTimeout(() => ws.close(), 1000); });
-    } catch (e) { console.error('Failed to submit score', e); }
+        ws.addEventListener('open', () => {
+            ws.send(JSON.stringify(payload));
+            setTimeout(() => ws.close(), 1000);
+        });
+    } catch (e) {
+        console.error('Failed to submit score to websocket server', e);
+    }
 }

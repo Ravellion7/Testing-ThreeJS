@@ -352,6 +352,7 @@ function triggerVictory() {
     gameState.timerRunning = false;
     document.exitPointerLock?.();
     window._arenaStopPlayerLoops?.();
+    window._arenaSubmitScore?.();
 
     const screen = document.getElementById('victory-overlay');
     if (screen) {

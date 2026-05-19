@@ -306,4 +306,7 @@ export function attachInputHandlers(utilityPickups, weaponPickups, multiplayerSt
         stopPlayerRifleLoopSound();
         stopPlayerFootstepSound();
     };
+    window._arenaSubmitScore = () => {
+        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
+    };
 }

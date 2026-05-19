@@ -49,18 +49,69 @@ function setupMainMenuMusicUnlock() {
     playMainMenuMusic();
 }
 
+function mergeAndSortLeaderboards(server, local) {
+    const combined = [...(server || []), ...(local || [])];
+    const unique = [];
+    const seen = new Set();
+    
+    combined.forEach(entry => {
+        if (!entry) return;
+        const key = `${entry.name || 'Anonymous'}_${entry.mode || 'Arena'}_${entry.score || 0}_${entry.date || '01/01'}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(entry);
+        }
+    });
+    
+    unique.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+    return unique.slice(0, 10);
+}
+
 function fetchLeaderboard() {
     const statusMsg = document.getElementById('status-message');
     if (statusMsg) {
         statusMsg.style.display = 'block';
-        statusMsg.textContent = 'Loading scores from server...';
+        statusMsg.textContent = 'Loading scores...';
     }
+
+    // Load local storage scores first as fallback/merge source
+    let localScores = [];
+    try {
+        const localRaw = localStorage.getItem('crownfall_leaderboard');
+        if (localRaw) {
+            localScores = JSON.parse(localRaw);
+        }
+    } catch (e) {
+        console.error('Error reading local leaderboard:', e);
+    }
+    if (!Array.isArray(localScores)) localScores = [];
+
+    let socket = null;
+    let connectionTimeout = null;
+
+    const useLocalFallback = (message) => {
+        if (connectionTimeout) clearTimeout(connectionTimeout);
+        renderLeaderboard(localScores.slice(0, 10));
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = message;
+        }
+    };
 
     try {
         const wsUrl = 'ws://localhost:8080';
-        const socket = new WebSocket(wsUrl);
+        socket = new WebSocket(wsUrl);
+
+        // 1.5 seconds timeout to fallback to local scores if server is not responding
+        connectionTimeout = setTimeout(() => {
+            if (socket.readyState !== WebSocket.OPEN) {
+                try { socket.close(); } catch (err) {}
+                useLocalFallback('Offline — showing local scores');
+            }
+        }, 1500);
 
         socket.addEventListener('open', () => {
+            if (connectionTimeout) clearTimeout(connectionTimeout);
             socket.send(JSON.stringify({ type: 'get_leaderboard' }));
         });
 
@@ -68,26 +119,22 @@ function fetchLeaderboard() {
             try {
                 const message = JSON.parse(event.data);
                 if (message.type === 'leaderboard_data') {
-                    renderLeaderboard(message.data);
+                    const merged = mergeAndSortLeaderboards(message.data, localScores);
+                    renderLeaderboard(merged);
                     if (statusMsg) statusMsg.style.display = 'none';
                     socket.close();
                 }
             } catch (e) {
                 console.error(e);
+                useLocalFallback('Failed to load server scores');
             }
         });
 
         socket.addEventListener('error', () => {
-            if (statusMsg) {
-                statusMsg.style.display = 'block';
-                statusMsg.textContent = 'Failed to connect to score server.';
-            }
+            useLocalFallback('Offline — showing local scores');
         });
     } catch (e) {
-        if (statusMsg) {
-            statusMsg.style.display = 'block';
-            statusMsg.textContent = 'Failed to load leaderboard.';
-        }
+        useLocalFallback('Offline — showing local scores');
     }
 }
 
