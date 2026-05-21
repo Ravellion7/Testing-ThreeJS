@@ -4,7 +4,7 @@ import {
     multiplayerState, multiplayerAssetCache, gameState, playerVitals,
     playerRoot, playerState, mouseState, weaponState, firingState,
     animationBank, animationActions, waveConfig, FLOOR_Y_OFFSET, PLAYER_MODEL_Y_OFFSET,
-    applyWeaponHoldTransform, tempBox, tempVectorA,
+    applyWeaponHoldTransform, tempBox, tempVectorA, maxWaves,
 } from './game-state.js';
 import { getSavedSettings } from './settings-utils.js';
 import { updateVitalsHud, updateWaveHud, updateEnemiesHud, updateNextWaveCountdownHud, showMultiplayerAnnouncement } from './hud.js';
@@ -179,7 +179,7 @@ function applyEnemySnapshot(snap) {
         if (multiplayerState.pendingEnemyVisualIds.has(snap.id)) return;
         multiplayerState.pendingEnemyVisualIds.add(snap.id);
         loadEnemyGuard(new THREE.Vector3(Number(snap.x) || 0, Number(snap.y) || FLOOR_Y_OFFSET, Number(snap.z) || 0)).then((e) => {
-            if (e) { e.serverEnemyId = snap.id; e.isServerDriven = true; e.state = 'server'; }
+            if (e) { e.serverEnemyId = snap.id; e.isServerDriven = true; e.state = 'server'; e._wasDeadOnLastSnapshot = false; }
         }).catch(() => {}).finally(() => { multiplayerState.pendingEnemyVisualIds.delete(snap.id); });
         return;
     }
@@ -189,7 +189,16 @@ function applyEnemySnapshot(snap) {
     if (typeof snap.z === 'number') existing.root.position.z = snap.z;
     if (typeof snap.rotY === 'number') existing.root.rotation.y = snap.rotY;
     if (typeof snap.health === 'number') existing.health = Math.max(0, snap.health);
-    existing.isDead = Boolean(snap.isDead);
+
+    const nowDead = Boolean(snap.isDead);
+    // Reward ammo and score the first time this enemy transitions to dead
+    if (nowDead && !existing._wasDeadOnLastSnapshot) {
+        existing._wasDeadOnLastSnapshot = true;
+        window._arenaRewardAmmoOnKill?.();
+        window._arenaAddScore?.(100);
+    }
+    existing.isDead = nowDead;
+
     const state = String(snap.state || '').toLowerCase();
     if (existing.isDead) {
         if (existing.animationBank.deathGun) { playEnemyAction(existing, existing.animationBank.deathGun, { transitionSeconds: 0.1, loopOnce: true }); }
@@ -199,10 +208,50 @@ function applyEnemySnapshot(snap) {
     if (state === 'walk') { playEnemyAction(existing, existing.animationBank.walkGun || existing.animationBank.idleGun); return; }
     playEnemyAction(existing, existing.animationBank.idleGun || existing.animationBank.walkGun);
 }
+let kothZoneMesh = null;
 
 function applyArenaStateSnapshot(snapshot, weaponPickups, utilityPickups) {
     if (!snapshot || typeof snapshot !== 'object') return;
     multiplayerState.sharedArenaActive = true; multiplayerState.lastArenaSnapshot = snapshot;
+    
+    if (gameState.gameMode === 'koth' && snapshot.koth) {
+        const koth = snapshot.koth;
+        // Update HUD
+        const p1ScoreEl = document.getElementById('koth-p1-score');
+        const p2ScoreEl = document.getElementById('koth-p2-score');
+        const statusEl = document.getElementById('koth-status');
+        if (p1ScoreEl) p1ScoreEl.textContent = Math.floor(koth.scores.p1 || 0);
+        if (p2ScoreEl) p2ScoreEl.textContent = Math.floor(koth.scores.p2 || 0);
+        if (statusEl) {
+            if (koth.hill.ownerId) {
+                statusEl.textContent = `Owned by ${koth.hill.ownerId}`;
+                statusEl.style.color = koth.hill.ownerId === multiplayerState.playerId ? '#4CAF50' : '#d9534f';
+            } else if (koth.hill.capturingId) {
+                statusEl.textContent = `Capturing... ${Math.floor(koth.hill.progress)}%`;
+                statusEl.style.color = '#daa520';
+            } else {
+                statusEl.textContent = 'Neutral';
+                statusEl.style.color = '#6ea8ff';
+            }
+        }
+        
+        // Draw capture zone
+        if (!kothZoneMesh) {
+            const geo = new THREE.CylinderGeometry(koth.hill.radius, koth.hill.radius, 0.2, 32);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x6ea8ff, transparent: true, opacity: 0.3, wireframe: true });
+            kothZoneMesh = new THREE.Mesh(geo, mat);
+            scene.add(kothZoneMesh);
+        }
+        kothZoneMesh.position.set(koth.hill.x, FLOOR_Y_OFFSET + 0.1, koth.hill.z);
+        if (koth.hill.ownerId) {
+            kothZoneMesh.material.color.setHex(koth.hill.ownerId === multiplayerState.playerId ? 0x4CAF50 : 0xd9534f);
+        } else if (koth.hill.capturingId) {
+            kothZoneMesh.material.color.setHex(0xdaa520);
+        } else {
+            kothZoneMesh.material.color.setHex(0x6ea8ff);
+        }
+    }
+
     if (Array.isArray(snapshot.players) && multiplayerState.playerId) {
         const me = snapshot.players.find((p) => p.id === multiplayerState.playerId);
         if (me) {
@@ -210,7 +259,7 @@ function applyArenaStateSnapshot(snapshot, weaponPickups, utilityPickups) {
             if (typeof me.shield === 'number') playerVitals.shield = Math.max(0, me.shield);
             if (typeof me.speedBoostRemaining === 'number') applyServerSpeedBoostSnapshot(me.speedBoostRemaining);
             updateVitalsHud();
-            if (playerVitals.health <= 0 && !gameState.isPlayerDead) window._arenaHandlePlayerDeath?.();
+            if (playerVitals.health <= 0 && !gameState.isPlayerDead && !gameState.isVictory) window._arenaHandlePlayerDeath?.();
         }
     }
     applyWaveSnapshot(snapshot.wave);
@@ -234,11 +283,21 @@ function applyArenaStateSnapshot(snapshot, weaponPickups, utilityPickups) {
 export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, selectedMap, selectedDifficulty) {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (!msg || typeof msg !== 'object') return;
+
+    // Once victory is shown, only allow the user's own button clicks to navigate.
+    // Ignore all incoming server messages so no snapshot/event can dismiss the screen.
+    if (gameState.isVictory && msg.type !== 'match_victory') return;
+
     if (msg.type === 'player_joined_announcement') { showMultiplayerAnnouncement(`<span style="color:#daa520;font-weight:bold">${msg.nickname || 'Player'}</span> has entered the arena`); return; }
     if (msg.type === 'assigned_player') {
         multiplayerState.playerId = msg.playerId || null;
         const sm = msg.map || 'city', sd = msg.difficulty || 'medium';
-        if (sm !== selectedMap || sd !== selectedDifficulty) { window.location.href = `arena.html?multiplayer=1&map=${sm}&difficulty=${sd}`; return; }
+        if (sm !== selectedMap || sd !== selectedDifficulty) {
+            // Preserve maxWaves in the redirect so the win condition survives
+            const mw = new URLSearchParams(window.location.search).get('maxWaves') || '0';
+            window.location.href = `arena.html?multiplayer=1&map=${sm}&difficulty=${sd}&maxWaves=${mw}`;
+            return;
+        }
         if (typeof msg.health === 'number') playerVitals.health = Math.max(0, msg.health);
         if (typeof msg.shield === 'number') playerVitals.shield = Math.max(0, msg.shield);
         updateVitalsHud();
@@ -260,6 +319,15 @@ export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, sel
         return;
     }
     if (msg.type === 'room_full') { setMultiplayerStatus('Room full (2/2 players)'); return; }
+    if (msg.type === 'match_victory' || msg.type === 'koth_victory') {
+        // Trigger the victory screen on both clients when the server signals the win
+        window._arenaStopPlayerLoops?.();
+        window._arenaSubmitScore?.();
+        if (typeof window._arenaServerTriggerVictory === 'function') {
+            window._arenaServerTriggerVictory(msg.wave || 0);
+        }
+        return;
+    }
     if (msg.type === 'arena_state_snapshot') { applyArenaStateSnapshot(msg, weaponPickups, utilityPickups); return; }
     if (msg.type === 'rifle_shot_result') {
         if (msg.targetId === multiplayerState.playerId) {
@@ -270,7 +338,32 @@ export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, sel
         }
         return;
     }
-    if (msg.type === 'player_eliminated') { setMultiplayerStatus(msg.playerId === multiplayerState.playerId ? 'You were eliminated' : 'Player eliminated'); return; }
+    if (msg.type === 'player_eliminated') { 
+        setMultiplayerStatus(msg.playerId === multiplayerState.playerId ? 'You were eliminated' : 'Player eliminated'); 
+        return; 
+    }
+    if (msg.type === 'player_respawned') {
+        if (msg.playerId === multiplayerState.playerId) {
+            playerVitals.health = msg.health;
+            playerVitals.shield = msg.shield;
+            playerRoot.position.set(msg.x, FLOOR_Y_OFFSET, msg.z);
+            updateVitalsHud();
+            
+            const respawnOverlay = document.getElementById('respawn-overlay');
+            if (respawnOverlay) respawnOverlay.style.display = 'none';
+            
+            gameState.isPlayerDead = false;
+            gameState.timerRunning = true;
+            window._arenaMouseState.isAimPressed = false;
+            window._arenaMouseState.isFirePressed = false;
+            
+            // Re-request pointer lock to resume gameplay smoothly
+            if (!gameState.isPaused && document.pointerLockElement !== renderer.domElement) {
+                renderer.domElement.requestPointerLock?.();
+            }
+        }
+        return;
+    }
     if (msg.type !== 'state_update' || !Array.isArray(msg.players)) return;
     const remote = msg.players.find((p) => p.id && p.id !== multiplayerState.playerId);
     if (remote) updateRemoteAvatarFromSnapshot(remote);
@@ -286,7 +379,7 @@ export function connectMultiplayerArena(weaponPickups, utilityPickups, selectedM
     socket.addEventListener('open', () => {
         setMultiplayerStatus('Connected. Joining Arena...');
         const settings = getSavedSettings();
-        socket.send(JSON.stringify({ type: 'join_arena', mode: 'arena', nickname: settings.nickname?.trim() || '', map: selectedMap, difficulty: selectedDifficulty }));
+        socket.send(JSON.stringify({ type: 'join_arena', mode: gameState.gameMode, nickname: settings.nickname?.trim() || '', map: selectedMap, difficulty: selectedDifficulty, maxWaves: maxWaves || 0 }));
     });
     socket.addEventListener('message', (ev) => handleMultiplayerMessage(ev.data, weaponPickups, utilityPickups, selectedMap, selectedDifficulty));
     socket.addEventListener('close', () => setMultiplayerStatus('Disconnected from server'));

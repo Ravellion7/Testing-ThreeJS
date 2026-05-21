@@ -17,7 +17,7 @@ import {
     updateVitalsHud, updatePowerupsHud, updateEnemiesHud, updateWaveHud,
     updateScoreHud, updateTimeHud, updateNextWaveCountdownHud,
     updateWeaponHudValues, updateWeaponHudVisibility, updateCrosshairVisibility,
-    updateHudHints,
+    updateHudHints, updateGameModeHudVisibility,
 } from './arena/hud.js';
 import { createEnvironment, loadArenaMap, shouldUseAsMapCollider } from './arena/map-loader.js';
 import {
@@ -58,6 +58,7 @@ setupAudioUnlockHandlers();
 ensureCityMusic();
 updateHudHints();
 updateWeaponHudValues();
+updateGameModeHudVisibility();
 setupPauseMenuListeners();
 setupIngameSettingsModal();
 setupDeathScreenListeners();
@@ -110,9 +111,11 @@ function animate() {
         );
         updateShotTracers(delta);
         updateMuzzleFlashes(delta);
-        updateEnemies(delta, isMultiplayerArenaEnabled, multiplayerState);
+        if (gameState.gameMode !== 'koth') {
+            updateEnemies(delta, isMultiplayerArenaEnabled, multiplayerState);
+            updateWaveSystem(delta, isMultiplayerArenaEnabled, multiplayerState);
+        }
         updateFootstepAudio(pressedKeys);
-        updateWaveSystem(delta, isMultiplayerArenaEnabled, multiplayerState);
         updateCrosshairVisibility();
         updateWeaponHudVisibility();
         updateWeaponHudValues();

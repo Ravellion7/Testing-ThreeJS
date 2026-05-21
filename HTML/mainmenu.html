@@ -128,7 +128,7 @@
                 </div>
 
                 <!-- Difficulty Selection -->
-                <div class="setting-section">
+                <div class="setting-section" id="difficulty-section">
                     <label class="section-title">CHOOSE DIFFICULTY</label>
                     <div class="difficulty-selectors">
                         <button class="diff-btn" data-diff="easy">
@@ -147,14 +147,20 @@
                 </div>
 
                 <!-- Duration Selection -->
-                <div class="setting-section">
-                    <label class="section-title">DURACIÓN DE LA PARTIDA</label>
+                <div class="setting-section" id="duration-section">
+                    <label class="section-title" id="duration-title">DURACIÓN DE LA PARTIDA</label>
                     <div class="duration-selector">
                         <select id="duration-select" class="duration-select">
                             <option value="2">Wave 2 — Partida corta</option>
                             <option value="5">Wave 5 — Partida estándar</option>
                             <option value="10" selected>Wave 10 — Partida larga</option>
                             <option value="0">Infinito — Sobrevive lo más que puedas</option>
+                        </select>
+                        <select id="koth-duration-select" class="duration-select" style="display: none;">
+                            <option value="500">Score: 500 — Partida corta</option>
+                            <option value="1000" selected>Score: 1000 — Partida estándar</option>
+                            <option value="1500">Score: 1500 — Partida larga</option>
+                            <option value="0">Infinito — Muerte súbita sin fin</option>
                         </select>
                     </div>
                 </div>

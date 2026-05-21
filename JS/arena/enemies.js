@@ -345,7 +345,7 @@ export async function startNextWave() {
 }
 
 // ── Victory ───────────────────────────────────────────────────
-function triggerVictory() {
+export function triggerVictory(waveOverride = null) {
     if (gameState.isVictory) return;
     gameState.isVictory = true;
     gameState.isPaused = true;
@@ -361,11 +361,14 @@ function triggerVictory() {
         const timeStr = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
         const el = (id) => document.getElementById(id);
         if (el('victory-score')) el('victory-score').textContent = gameState.score;
-        if (el('victory-wave'))  el('victory-wave').textContent  = `Wave ${gameState.currentWave}`;
+        if (el('victory-wave'))  el('victory-wave').textContent  = `Wave ${waveOverride ?? gameState.currentWave}`;
         if (el('victory-time'))  el('victory-time').textContent  = timeStr;
         screen.classList.add('active');
     }
 }
+
+// Expose for multiplayer: called when the server broadcasts match_victory
+window._arenaServerTriggerVictory = (serverWave) => triggerVictory(serverWave);
 
 export function updateWaveSystem(deltaSeconds, isMultiplayerArenaEnabled, multiplayerState) {
     if (isMultiplayerArenaEnabled() && multiplayerState.sharedArenaActive) { updateNextWaveCountdownHud(); return; }

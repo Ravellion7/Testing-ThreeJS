@@ -4,8 +4,8 @@ const WebSocket = require('ws');
 const THREE = require('three');
 
 const PORT = process.env.PORT || 8080;
-const TICK_RATE = 20;
-const MAX_PLAYERS = 2;
+const TICK_RATE = 60;
+const MAX_PLAYERS = 4; // Increased for KOTH
 
 const FLOOR_Y = -0.12;
 const PLAYER_BASE_HEALTH = 100;
@@ -62,9 +62,16 @@ const arenaColliderState = {
 };
 
 const worldState = {
+  gameMode: 'arena', // 'arena' or 'koth'
+  koth: {
+    scores: { p1: 0, p2: 0, p3: 0, p4: 0 },
+    hill: { x: 0, z: 0, radius: 8, ownerId: null, capturingId: null, progress: 0 }
+  },
   nextEnemyId: 1,
   waveSpawnCursor: 0,
   enemies: [],
+  matchVictoryTriggered: false,
+  maxWaves: 0,
   wave: {
     current: 0,
     targetKills: 0,
@@ -92,13 +99,7 @@ async function loadLeaderboard() {
     const content = await fs.readFile(leaderboardFilePath, 'utf8');
     return JSON.parse(content);
   } catch (e) {
-    return [
-      { name: "DragonSlayer", mode: "Arena", score: 15420, date: "05/01" },
-      { name: "ShadowHunter", mode: "Arena", score: 14850, date: "05/02" },
-      { name: "IronWarrior", mode: "Arena", score: 13990, date: "05/02" },
-      { name: "StormBringer", mode: "Arena", score: 13200, date: "05/03" },
-      { name: "NightRaven", mode: "Arena", score: 12750, date: "05/04" }
-    ];
+    return [];
   }
 }
 
@@ -111,12 +112,16 @@ async function saveLeaderboard(data) {
 }
 
 function createDefaultPlayerState(id) {
-  const startX = id === 'p1' ? -2 : 2;
+  let startX = 0, startZ = 0;
+  if (id === 'p1') { startX = -4; startZ = -4; }
+  else if (id === 'p2') { startX = 4; startZ = 4; }
+  else if (id === 'p3') { startX = -4; startZ = 4; }
+  else if (id === 'p4') { startX = 4; startZ = -4; }
   return {
     id,
     x: startX,
     y: FLOOR_Y,
-    z: 0,
+    z: startZ,
     rotY: 0,
     health: PLAYER_BASE_HEALTH,
     shield: PLAYER_BASE_SHIELD,
@@ -135,6 +140,10 @@ function createDefaultPlayerState(id) {
 function getFreePlayerId() {
   if (![...players.values()].find((p) => p.id === 'p1')) return 'p1';
   if (![...players.values()].find((p) => p.id === 'p2')) return 'p2';
+  if (worldState.gameMode === 'koth') {
+    if (![...players.values()].find((p) => p.id === 'p3')) return 'p3';
+    if (![...players.values()].find((p) => p.id === 'p4')) return 'p4';
+  }
   return null;
 }
 
@@ -159,9 +168,16 @@ function livingPlayers() {
 }
 
 function resetArenaState() {
+  worldState.koth = {
+    scores: { p1: 0, p2: 0, p3: 0, p4: 0 },
+    hill: { x: 0, z: 0, radius: 8, ownerId: null, capturingId: null, progress: 0 }
+  };
   worldState.nextEnemyId = 1;
   worldState.waveSpawnCursor = 0;
   worldState.enemies = [];
+  worldState.matchVictoryTriggered = false;
+  // NOTE: maxWaves is intentionally NOT reset here — it's set once per match
+  // when the first player joins and must survive resets during match setup.
   worldState.wave.current = 0;
   worldState.wave.targetKills = 0;
   worldState.wave.kills = 0;
@@ -411,6 +427,16 @@ function updateWave(dtSeconds) {
 
   const completed = wave.kills >= wave.targetKills && wave.spawned >= wave.targetKills && getAliveEnemies().length === 0;
   if (completed) {
+    // ── Victory check ──────────────────────────────────────────
+    const maxW = worldState.maxWaves || 0;
+    if (maxW > 0 && wave.current >= maxW) {
+      if (!worldState.matchVictoryTriggered) {
+        worldState.matchVictoryTriggered = true;
+        broadcastJson({ type: 'match_victory', wave: wave.current });
+      }
+      // After victory, stop wave progression entirely - no more waves
+      return;
+    }
     wave.pendingStart = true;
     wave.delayRemaining = WAVE_INTERMISSION_DELAY;
   }
@@ -515,6 +541,53 @@ function tryCollectPickup(player, message) {
   }
 }
 
+function updateKOTH(dt) {
+  if (worldState.matchVictoryTriggered) return;
+  
+  const playersInHill = livingPlayers().filter(p => {
+    const dist = Math.hypot(p.x - worldState.koth.hill.x, p.z - worldState.koth.hill.z);
+    return dist <= worldState.koth.hill.radius;
+  });
+
+  const koth = worldState.koth;
+  
+  if (playersInHill.length === 1) {
+    const pId = playersInHill[0].id;
+    if (koth.hill.ownerId !== pId) {
+      if (koth.hill.capturingId === pId) {
+        koth.hill.progress = Math.min(100, koth.hill.progress + dt * 25);
+        if (koth.hill.progress >= 100) {
+          koth.hill.ownerId = pId;
+          koth.hill.capturingId = null;
+          koth.hill.progress = 100;
+        }
+      } else {
+        koth.hill.capturingId = pId;
+        koth.hill.progress = dt * 25;
+      }
+    } else {
+      koth.hill.progress = 100;
+      koth.hill.capturingId = null;
+    }
+  } else if (playersInHill.length > 1) {
+    // Contested
+  } else {
+    // Empty hill
+    koth.hill.capturingId = null;
+    if (koth.hill.progress > 0) {
+      koth.hill.progress = Math.max(0, koth.hill.progress - dt * 10);
+    }
+  }
+
+  if (koth.hill.ownerId) {
+    koth.scores[koth.hill.ownerId] += dt * 10;
+    if (worldState.maxWaves > 0 && koth.scores[koth.hill.ownerId] >= worldState.maxWaves && !worldState.matchVictoryTriggered) {
+      worldState.matchVictoryTriggered = true;
+      broadcastJson({ type: 'koth_victory', winnerId: koth.hill.ownerId });
+    }
+  }
+}
+
 function handleRifleShot(player, message) {
   if (!player || player.health <= 0) return;
 
@@ -535,26 +608,68 @@ function handleRifleShot(player, message) {
   }
 
   let selectedEnemy = null;
+  let selectedPlayerHit = null;
   let selectedDistance = Number.POSITIVE_INFINITY;
-  getAliveEnemies().forEach((enemy) => {
-    const toEnemyX = enemy.x - player.x;
-    const toEnemyZ = enemy.z - player.z;
-    const dist = Math.hypot(toEnemyX, toEnemyZ);
-    if (dist <= 0.0001 || dist > MAX_RIFLE_RANGE) return;
 
-    const towardX = toEnemyX / dist;
-    const towardZ = toEnemyZ / dist;
-    const dot = (dirX * towardX) + (dirZ * towardZ);
-    if (dot < HIT_CONE_DOT) return;
+  if (worldState.gameMode === 'koth') {
+    livingPlayers().forEach((otherPlayer) => {
+      if (otherPlayer.id === player.id) return;
+      const toX = otherPlayer.x - player.x;
+      const toZ = otherPlayer.z - player.z;
+      const dist = Math.hypot(toX, toZ);
+      if (dist <= 0.0001 || dist > MAX_RIFLE_RANGE) return;
 
-    if (dist < selectedDistance) {
-      selectedDistance = dist;
-      selectedEnemy = enemy;
-    }
-  });
+      const towardX = toX / dist;
+      const towardZ = toZ / dist;
+      const dot = (dirX * towardX) + (dirZ * towardZ);
+      if (dot < HIT_CONE_DOT) return;
 
-  if (selectedEnemy) {
+      if (dist < selectedDistance) {
+        selectedDistance = dist;
+        selectedPlayerHit = otherPlayer;
+      }
+    });
+  } else {
+    getAliveEnemies().forEach((enemy) => {
+      const toEnemyX = enemy.x - player.x;
+      const toEnemyZ = enemy.z - player.z;
+      const dist = Math.hypot(toEnemyX, toEnemyZ);
+      if (dist <= 0.0001 || dist > MAX_RIFLE_RANGE) return;
+
+      const towardX = toEnemyX / dist;
+      const towardZ = toEnemyZ / dist;
+      const dot = (dirX * towardX) + (dirZ * towardZ);
+      if (dot < HIT_CONE_DOT) return;
+
+      if (dist < selectedDistance) {
+        selectedDistance = dist;
+        selectedEnemy = enemy;
+      }
+    });
+  }
+
+  if (selectedPlayerHit) {
+    applyDamageToPlayer(selectedPlayerHit, RIFLE_DAMAGE, player.id);
+  } else if (selectedEnemy) {
     applyDamageToEnemy(selectedEnemy, RIFLE_DAMAGE);
+  }
+}
+
+function applyDamageToPlayer(targetPlayer, damage, attackerId) {
+  if (targetPlayer.shield > 0) {
+    const shieldDmg = Math.min(targetPlayer.shield, damage);
+    targetPlayer.shield -= shieldDmg;
+    damage -= shieldDmg;
+  }
+  if (damage > 0) {
+    targetPlayer.health -= damage;
+  }
+  if (targetPlayer.health <= 0) {
+    targetPlayer.health = 0;
+    broadcastJson({ type: 'player_eliminated', playerId: targetPlayer.id, attackerId });
+    if (worldState.gameMode === 'koth') {
+      targetPlayer.respawnTimer = 3;
+    }
   }
 }
 
@@ -572,6 +687,7 @@ function buildArenaSnapshot() {
       isDead: enemy.isDead,
       state: enemy.state,
     })),
+    koth: worldState.koth,
     wave: {
       current: worldState.wave.current,
       targetKills: worldState.wave.targetKills,
@@ -634,21 +750,27 @@ wss.on('connection', (socket) => {
 
     if (message.type === 'join_arena') {
       if (players.size >= MAX_PLAYERS) {
-        sendJson(socket, { type: 'room_full', message: 'Arena room already has 2 players.' });
+        sendJson(socket, { type: 'room_full', message: `Arena room already has ${MAX_PLAYERS} players.` });
         return;
       }
 
       const id = getFreePlayerId();
       if (!id) {
-        sendJson(socket, { type: 'room_full', message: 'Arena room already has 2 players.' });
+        sendJson(socket, { type: 'room_full', message: `Arena room already has ${MAX_PLAYERS} players.` });
         return;
       }
 
-      // Configure map and difficulty when the first player starts the match
+      // Configure map, difficulty, maxWaves and gameMode when the first player starts the match
       if (players.size === 0) {
+        worldState.gameMode = message.mode === 'koth' ? 'koth' : 'arena';
         worldState.selectedMap = (message.map && typeof message.map === 'string') ? message.map : 'city';
         const diff = (message.difficulty && typeof message.difficulty === 'string') ? message.difficulty : 'medium';
         worldState.selectedDifficulty = diff;
+        const rawMaxWaves = message.maxWaves;
+        worldState.maxWaves = (rawMaxWaves !== undefined && rawMaxWaves !== null)
+          ? Math.max(0, parseInt(rawMaxWaves, 10) || 0)
+          : 0;
+        worldState.matchVictoryTriggered = false;
 
         if (diff === 'easy') {
           ENEMY_DAMAGE = 4;
@@ -770,13 +892,32 @@ setInterval(() => {
   const dtSeconds = 1 / TICK_RATE;
 
   players.forEach((player) => {
-    player.speedBoostRemaining = Math.max(0, (player.speedBoostRemaining || 0) - dtSeconds);
+    if (player.health <= 0 && player.respawnTimer !== undefined && player.respawnTimer > 0) {
+      player.respawnTimer -= dtSeconds;
+      if (player.respawnTimer <= 0) {
+        player.respawnTimer = 0;
+        player.health = PLAYER_BASE_HEALTH;
+        player.shield = PLAYER_BASE_SHIELD;
+        const startX = (player.id === 'p1' || player.id === 'p3') ? -4 : 4;
+        const startZ = (player.id === 'p1' || player.id === 'p4') ? -4 : 4;
+        player.x = startX;
+        player.z = startZ;
+        broadcastJson({ type: 'player_respawned', playerId: player.id, x: startX, z: startZ, health: player.health, shield: player.shield });
+      }
+    } else {
+      player.speedBoostRemaining = Math.max(0, (player.speedBoostRemaining || 0) - dtSeconds);
+    }
   });
 
   updatePickupRespawns(worldState.weaponPickups, dtSeconds);
   updatePickupRespawns(worldState.utilityPickups, dtSeconds);
-  updateWave(dtSeconds);
-  updateEnemies(dtSeconds);
+  
+  if (worldState.gameMode === 'koth') {
+    updateKOTH(dtSeconds);
+  } else {
+    updateWave(dtSeconds);
+    updateEnemies(dtSeconds);
+  }
 
   broadcastJson({ type: 'state_update', players: activePlayers() });
   broadcastJson(buildArenaSnapshot());

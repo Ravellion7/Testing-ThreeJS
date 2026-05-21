@@ -137,18 +137,40 @@ document.addEventListener('DOMContentLoaded', function() {
     const mapCards = document.querySelectorAll('.map-card');
     const diffBtns = document.querySelectorAll('.diff-btn');
 
-    function openMatchSettingsModal(isMultiplayer) {
-        matchIsMultiplayer = isMultiplayer;
+    let selectedMatchMode = 'sp'; // 'sp', 'mp', 'koth'
+
+    function openMatchSettingsModal(mode) {
+        selectedMatchMode = mode;
         isModalOpen = true;
         
         // Reset selections to defaults
         selectedMap = 'city';
         selectedDifficulty = 'medium';
-        selectedDuration = 10;
+        selectedDuration = mode === 'koth' ? 1000 : 10;
         
-        // Reset duration dropdown
+        // Setup KOTH specific UI
+        const diffSection = document.getElementById('difficulty-section');
         const durationSelect = document.getElementById('duration-select');
-        if (durationSelect) durationSelect.value = '10';
+        const kothDurationSelect = document.getElementById('koth-duration-select');
+        const durationTitle = document.getElementById('duration-title');
+        
+        if (mode === 'koth') {
+            if (diffSection) diffSection.style.display = 'none';
+            if (durationSelect) durationSelect.style.display = 'none';
+            if (kothDurationSelect) {
+                kothDurationSelect.style.display = 'block';
+                kothDurationSelect.value = '1000';
+            }
+            if (durationTitle) durationTitle.textContent = 'PUNTOS PARA GANAR';
+        } else {
+            if (diffSection) diffSection.style.display = 'block';
+            if (kothDurationSelect) kothDurationSelect.style.display = 'none';
+            if (durationSelect) {
+                durationSelect.style.display = 'block';
+                durationSelect.value = '10';
+            }
+            if (durationTitle) durationTitle.textContent = 'DURACIÓN DE LA PARTIDA';
+        }
         
         mapCards.forEach(c => c.classList.remove('active'));
         const defaultCard = document.querySelector('.map-card[data-map="city"]');
@@ -169,11 +191,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function launchMatch() {
-        const durationSelect = document.getElementById('duration-select');
+        const durationSelect = document.getElementById(selectedMatchMode === 'koth' ? 'koth-duration-select' : 'duration-select');
         if (durationSelect) selectedDuration = parseInt(durationSelect.value, 10);
+        
         let url = `arena.html?map=${selectedMap}&difficulty=${selectedDifficulty}&maxWaves=${selectedDuration}`;
-        if (matchIsMultiplayer) {
+        if (selectedMatchMode === 'mp') {
             url = `arena.html?multiplayer=1&map=${selectedMap}&difficulty=${selectedDifficulty}&maxWaves=${selectedDuration}`;
+        } else if (selectedMatchMode === 'koth') {
+            url = `arena.html?mode=koth&multiplayer=1&map=${selectedMap}&difficulty=${selectedDifficulty}&maxWaves=${selectedDuration}`;
         }
         
         playSelectSound();
@@ -259,9 +284,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (link) {
                         const isSP = menuItems[currentSelection].getAttribute('data-index') === '1';
                         const isMP = menuItems[currentSelection].getAttribute('data-index') === '2';
+                        const isKOTH = menuItems[currentSelection].getAttribute('data-index') === '3';
                         
-                        if (isSP || isMP) {
-                            openMatchSettingsModal(isMP);
+                        if (isSP) {
+                            openMatchSettingsModal('sp');
+                        } else if (isMP) {
+                            openMatchSettingsModal('mp');
+                        } else if (isKOTH) {
+                            openMatchSettingsModal('koth');
                         } else {
                             playSelectSound();
                             // Add click animation
@@ -296,10 +326,17 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', function(e) {
             const isSP = item.getAttribute('data-index') === '1';
             const isMP = item.getAttribute('data-index') === '2';
+            const isKOTH = item.getAttribute('data-index') === '3';
             
-            if (isSP || isMP) {
+            if (isSP) {
                 e.preventDefault();
-                openMatchSettingsModal(isMP);
+                openMatchSettingsModal('sp');
+            } else if (isMP) {
+                e.preventDefault();
+                openMatchSettingsModal('mp');
+            } else if (isKOTH) {
+                e.preventDefault();
+                openMatchSettingsModal('koth');
             } else {
                 playSelectSound();
             }

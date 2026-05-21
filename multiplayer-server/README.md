@@ -23,6 +23,8 @@ By default, it runs at:
 
 `ws://localhost:8080`
 
+Or connect to: 'http://127.0.0.1:5500/HTML/mainmenu.html'
+
 ## 4) Open the game in multiplayer mode
 Use this URL:
 

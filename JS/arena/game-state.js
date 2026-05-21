@@ -162,6 +162,7 @@ export const speedPowerupState = {
 };
 
 export const gameState = {
+    gameMode: urlParams.get('mode') === 'koth' ? 'koth' : 'arena',
     score: 0, elapsedSeconds: 0, timerRunning: true, isPaused: false,
     isPlayerDead: false, isVictory: false, currentWave: 0, currentWaveTargetKills: 0,
     currentWaveKills: 0, currentWaveSpawned: 0, waveSpawnCursor: 0,
@@ -173,7 +174,7 @@ export const multiplayerState = {
     serverUrl: urlParams.get('ws') || 'ws://localhost:8080',
     socket: null, playerId: null, matchStarted: false,
     sharedArenaActive: false, statusElement: null, statusText: 'Disconnected',
-    lastPoseSentAt: 0, poseSendIntervalMs: 50,
+    lastPoseSentAt: 0, poseSendIntervalMs: 16, // Increased update frequency (was 50ms)
     remotePlayerRoot: null, remotePlayerId: null,
     remoteAvatar: null, remoteAvatarLoading: null,
     lastRemoteSnapshot: null, lastArenaSnapshot: null,

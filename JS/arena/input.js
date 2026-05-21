@@ -9,13 +9,13 @@ import {
     backToGameButtonElement, retryButtonElement, deathMenuButtonElement,
     deathTimeElement, deathWaveElement, deathScoreElement,
     victoryOverlayElement, victoryRetryButtonElement, victoryMenuButtonElement,
-    formatHudTime, updateWeaponHudValues, updateVitalsHud, updateTimeHud,
+    formatHudTime, updateWeaponHudValues, updateVitalsHud, updateTimeHud, addScore
 } from './hud.js';
 import {
     startCityMusic, ensureCityMusic, stopPlayerRifleLoopSound, stopPlayerFootstepSound,
     playPositionalOneShot,
 } from './audio.js';
-import { startRifleReload, pickUpWeapon } from './weapons.js';
+import { startRifleReload, pickUpWeapon, rewardAmmoOnEnemyKill } from './weapons.js';
 import { getClosestWeaponPickup } from './pickups.js';
 import { leaveMultiplayerArenaSession, notifyServerPickupCollect, submitLeaderboardScore } from './multiplayer.js';
 import { getHorizontalDistanceXZ } from './pickups.js';
@@ -62,6 +62,8 @@ export function togglePauseGame() {
 // ── Player death ──────────────────────────────────────────────
 export function handlePlayerDeath() {
     if (gameState.isPlayerDead) return;
+    // Never trigger death after victory - message ordering can cause both in the same frame
+    if (gameState.isVictory) return;
     gameState.isPlayerDead = true; gameState.timerRunning = false;
     pressedKeys.clear(); mouseState.isAimPressed = false; mouseState.isFirePressed = false;
     mouseState.hasSemiShotQueued = false; playerState.hasJumpQueued = false;
@@ -72,9 +74,16 @@ export function handlePlayerDeath() {
     if (deathTimeElement) deathTimeElement.textContent = formatHudTime(gameState.elapsedSeconds);
     if (deathWaveElement) deathWaveElement.textContent = `Wave ${Math.max(1, gameState.currentWave || 1)}`;
     if (deathScoreElement) deathScoreElement.textContent = String(Math.max(0, Math.floor(gameState.score || 0)));
-    document.getElementById('death-overlay')?.classList.add('active');
+    
+    if (gameState.gameMode === 'koth') {
+        const respawnOverlay = document.getElementById('respawn-overlay');
+        if (respawnOverlay) respawnOverlay.style.display = 'flex';
+    } else {
+        document.getElementById('death-overlay')?.classList.add('active');
+        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
+    }
+    
     playPositionalOneShot('../Sounds/character_death.mp3', audioConfig.characterDeathVolume, playerRoot, { refDistance: 7, maxDistance: 90, rolloff: 1.2 });
-    submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
 }
 
 export function applyDamageToPlayer(amount) {
@@ -84,7 +93,7 @@ export function applyDamageToPlayer(amount) {
     if (dmg > 0) playerVitals.health = Math.max(0, playerVitals.health - dmg);
     playPositionalOneShot('../Sounds/character_hit.mp3', audioConfig.characterHitVolume, playerRoot, { refDistance: 6, maxDistance: 70, rolloff: 1.2 });
     updateVitalsHud();
-    if (playerVitals.health <= 0) handlePlayerDeath();
+    if (playerVitals.health <= 0 && !gameState.isPlayerDead && !gameState.isVictory) window._arenaHandlePlayerDeath?.();
 }
 
 // ── Game timer ────────────────────────────────────────────────
@@ -116,12 +125,18 @@ export function setupPauseMenuListeners() {
 }
 
 export function setupDeathScreenListeners() {
-    retryButtonElement?.addEventListener('click', () => window.location.reload());
+    retryButtonElement?.addEventListener('click', () => {
+        leaveMultiplayerArenaSession('Retrying match');
+        setTimeout(() => window.location.reload(), 80);
+    });
     deathMenuButtonElement?.addEventListener('click', () => {
         leaveMultiplayerArenaSession('Returning to main menu');
         setTimeout(() => { window.location.href = 'mainmenu.html'; }, 80);
     });
-    victoryRetryButtonElement?.addEventListener('click', () => window.location.reload());
+    victoryRetryButtonElement?.addEventListener('click', () => {
+        leaveMultiplayerArenaSession('Retrying match');
+        setTimeout(() => window.location.reload(), 80);
+    });
     victoryMenuButtonElement?.addEventListener('click', () => {
         leaveMultiplayerArenaSession('Returning to main menu');
         setTimeout(() => { window.location.href = 'mainmenu.html'; }, 80);
@@ -308,5 +323,11 @@ export function attachInputHandlers(utilityPickups, weaponPickups, multiplayerSt
     };
     window._arenaSubmitScore = () => {
         submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
+    };
+    window._arenaRewardAmmoOnKill = () => {
+        rewardAmmoOnEnemyKill(30);
+    };
+    window._arenaAddScore = (amount) => {
+        addScore(amount);
     };
 }

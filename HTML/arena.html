@@ -50,16 +50,33 @@
         </div>
     </div>
     
-    <!-- TOP RIGHT: Wave & Enemies -->
+    <!-- TOP RIGHT: Wave & Enemies (or KOTH info) -->
     <div class="hud-top-right">
-        <div class="wave-info">
-            <div class="wave-label">Wave</div>
-            <div class="wave-number" id="wave">1</div>
+        <!-- Arena Survival Mode Info -->
+        <div id="arena-survival-info">
+            <div class="wave-info">
+                <div class="wave-label">Wave</div>
+                <div class="wave-number" id="wave">1</div>
+            </div>
+            <div class="next-wave-countdown" id="next-wave-countdown"></div>
+            <div class="enemies-info">
+                <div class="enemies-label">Enemies remaining:</div>
+                <div class="enemies-count" id="enemies-remaining">10</div>
+            </div>
         </div>
-        <div class="next-wave-countdown" id="next-wave-countdown"></div>
-        <div class="enemies-info">
-            <div class="enemies-label">Enemies remaining:</div>
-            <div class="enemies-count" id="enemies-remaining">10</div>
+
+        <!-- King of the Hill Info -->
+        <div id="koth-info" style="display: none;">
+            <div class="wave-info" style="margin-bottom: 10px;">
+                <div class="wave-label" style="color: #6ea8ff;">HILL STATUS</div>
+                <div class="wave-number" id="koth-status" style="font-size: 1.5em;">Neutral</div>
+            </div>
+            <div class="enemies-info" style="margin-bottom: 5px;">
+                <div class="enemies-label">Team 1 Score: <span id="koth-p1-score" style="color: #daa520; font-weight: bold;">0</span> / 1000</div>
+            </div>
+            <div class="enemies-info">
+                <div class="enemies-label">Team 2 Score: <span id="koth-p2-score" style="color: #daa520; font-weight: bold;">0</span> / 1000</div>
+            </div>
         </div>
     </div>
     
@@ -143,6 +160,18 @@
             <div class="death-buttons">
                 <button class="death-btn retry-btn" id="retry-btn">Retry</button>
                 <button class="death-btn death-menu-btn" id="death-menu-btn">Main Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESPAWN SCREEN (KOTH) -->
+    <div class="death-overlay" id="respawn-overlay" style="display: none; background: rgba(139, 0, 0, 0.4); z-index: 9999;">
+        <div class="death-screen" style="border-color: #ff4444; background: rgba(20, 10, 10, 0.9);">
+            <h1 class="death-title" style="color: #ff4444;">You were Eliminated!</h1>
+            <div class="death-stats">
+                <div class="death-stat-row" style="justify-content: center;">
+                    <span class="death-stat-value" style="font-size: 1.5em; color: #daa520;">Respawning in 3...</span>
+                </div>
             </div>
         </div>
     </div>

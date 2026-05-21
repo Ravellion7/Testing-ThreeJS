@@ -20,6 +20,11 @@ export const waveElement = document.getElementById('wave');
 export const nextWaveCountdownElement = document.getElementById('next-wave-countdown');
 export const scoreElement = document.getElementById('score');
 export const timeElement = document.getElementById('time');
+export const arenaSurvivalInfoElement = document.getElementById('arena-survival-info');
+export const kothInfoElement = document.getElementById('koth-info');
+export const kothStatusElement = document.getElementById('koth-status');
+export const kothP1ScoreElement = document.getElementById('koth-p1-score');
+export const kothP2ScoreElement = document.getElementById('koth-p2-score');
 export const pauseOverlayElement = document.getElementById('pause-overlay');
 export const continueButtonElement = document.getElementById('continue-btn');
 export const settingsButtonElement = document.getElementById('settings-btn');
@@ -114,6 +119,16 @@ function isAimActive() {
 export function updateScoreHud() {
     if (!scoreElement) return;
     scoreElement.textContent = String(Math.max(0, Math.floor(gameState.score)));
+}
+
+export function updateGameModeHudVisibility() {
+    if (gameState.gameMode === 'koth') {
+        if (arenaSurvivalInfoElement) arenaSurvivalInfoElement.style.display = 'none';
+        if (kothInfoElement) kothInfoElement.style.display = 'block';
+    } else {
+        if (arenaSurvivalInfoElement) arenaSurvivalInfoElement.style.display = 'block';
+        if (kothInfoElement) kothInfoElement.style.display = 'none';
+    }
 }
 
 export function updateTimeHud() {
