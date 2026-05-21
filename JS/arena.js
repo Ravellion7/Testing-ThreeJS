@@ -65,7 +65,7 @@ attachInputHandlers(utilityPickups, weaponPickups, multiplayerState, isMultiplay
 connectMultiplayerArena(weaponPickups, utilityPickups, selectedMap, selectedDifficulty);
 
 // ── Map & character ───────────────────────────────────────────
-const mapPaths = { town: '../Maps/Town.glb', desert: '../Maps/arena_city.glb', city: '../Maps/arena_city.glb' };
+const mapPaths = { town: '../Maps/Town.glb', desert: '../Maps/Desert.glb', city: '../Maps/arena_city.glb' };
 loadArenaMap(mapPaths[selectedMap] || '../Maps/arena_city.glb', {
     registerGround: true, registerColliders: true, colliderFilter: shouldUseAsMapCollider,
 });

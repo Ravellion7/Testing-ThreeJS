@@ -34,6 +34,7 @@ export function createEnvironment() {
         gridColor = 0xdaa520; gridLineColor = 0x7c542a;
         scene.background = new THREE.Color(fogColor);
         scene.fog = new THREE.Fog(fogColor, 15, 80);
+        hdriPath = '../HDRIS/overcast_soil_puresky_2k.exr';
     } else {
         scene.background = new THREE.Color(0x0b1020);
         scene.fog = new THREE.Fog(0x0b1020, 30, 120);

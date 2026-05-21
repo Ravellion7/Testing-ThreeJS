@@ -473,16 +473,18 @@ body::after {
 }
 
 .desert-thumb {
-    background: linear-gradient(135deg, #4f361a 0%, #8a6d45 100%);
+    background-image: url('../Thumbnails/Desert.png');
+    background-size: cover;
+    background-position: center;
 }
 .desert-thumb::after {
     content: '';
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: 1px;
-    background: rgba(218, 165, 32, 0.5);
-    top: 40%;
-    animation: wave-scan 3s linear infinite;
+    height: 100%;
+    background: radial-gradient(circle at center, transparent 30%, rgba(218, 165, 32, 0.15) 100%);
 }
 
 @keyframes wave-scan {
