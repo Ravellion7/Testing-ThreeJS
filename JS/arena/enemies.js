@@ -345,7 +345,7 @@ export async function startNextWave() {
 }
 
 // ── Victory ───────────────────────────────────────────────────
-export function triggerVictory(waveOverride = null) {
+export function triggerVictory(waveOverride = null, isDefeat = false) {
     if (gameState.isVictory) return;
     gameState.isVictory = true;
     gameState.isPaused = true;
@@ -363,12 +363,50 @@ export function triggerVictory(waveOverride = null) {
         if (el('victory-score')) el('victory-score').textContent = gameState.score;
         if (el('victory-wave'))  el('victory-wave').textContent  = `Wave ${waveOverride ?? gameState.currentWave}`;
         if (el('victory-time'))  el('victory-time').textContent  = timeStr;
+        
+        if (isDefeat) {
+            if (el('victory-title')) {
+                el('victory-title').textContent = 'DERROTA';
+                el('victory-title').style.color = '#ff6b6b';
+                el('victory-title').style.textShadow = '0 0 30px rgba(220,80,80,0.7)';
+            }
+            if (el('victory-subtitle')) {
+                el('victory-subtitle').textContent = 'El oponente alcanzó el límite de puntos';
+                el('victory-subtitle').style.color = '#ffbaba';
+            }
+            const container = el('victory-screen-container');
+            if (container) {
+                container.style.borderColor = 'rgba(220,80,80,0.45)';
+                container.style.boxShadow = '0 0 60px rgba(200,50,50,0.25), inset 0 0 40px rgba(200,50,50,0.05)';
+            }
+            const overlay = el('victory-overlay');
+            if (overlay) {
+                overlay.style.background = 'rgba(120, 14, 14, 0.42)';
+            }
+            const shareRow = document.querySelector('.victory-share-row');
+            if (shareRow) shareRow.style.display = 'none';
+        }
+        
+        const finalScore = Math.max(0, Math.floor(gameState.score || 0));
+        const shareText = `¡Acabo de ganar una partida en Crownfall con ${finalScore} puntos! ¿Puedes superarme?`;
+        const shareUrl = "https://tu-sitio-crownfall.com"; // URL del juego
+        
+        if (el('share-twitter-btn')) {
+            el('share-twitter-btn').href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+        }
+        if (el('share-facebook-btn')) {
+            el('share-facebook-btn').href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+        }
+        if (el('share-whatsapp-btn')) {
+            el('share-whatsapp-btn').href = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + " " + shareUrl)}`;
+        }
+
         screen.classList.add('active');
     }
 }
 
 // Expose for multiplayer: called when the server broadcasts match_victory
-window._arenaServerTriggerVictory = (serverWave) => triggerVictory(serverWave);
+window._arenaServerTriggerVictory = (serverWave, isDefeat) => triggerVictory(serverWave, isDefeat);
 
 export function updateWaveSystem(deltaSeconds, isMultiplayerArenaEnabled, multiplayerState) {
     if (isMultiplayerArenaEnabled() && multiplayerState.sharedArenaActive) { updateNextWaveCountdownHud(); return; }

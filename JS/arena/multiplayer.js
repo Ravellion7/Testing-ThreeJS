@@ -33,7 +33,7 @@ function ensureMultiplayerStatusElement() {
     return el;
 }
 
-// ── Remote avatar ─────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Remote avatar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function findRightHandBoneInRoot(root) {
     if (!root) return null;
     let found = null;
@@ -160,7 +160,7 @@ function updateRemoteAvatarFromSnapshot(snapshot) {
     });
 }
 
-// ── Arena state snapshot ──────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Arena state snapshot Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function applyWaveSnapshot(snap) {
     if (!snap || typeof snap !== 'object') return;
     if (typeof snap.current === 'number') gameState.currentWave = Math.max(0, snap.current);
@@ -191,11 +191,16 @@ function applyEnemySnapshot(snap) {
     if (typeof snap.health === 'number') existing.health = Math.max(0, snap.health);
 
     const nowDead = Boolean(snap.isDead);
-    // Reward ammo and score the first time this enemy transitions to dead
+    // Reward ammo and score the first time this enemy transitions to dead.
+    // Score only goes to the player who landed the killing blow (snap.killerId).
+    // If killerId is absent (solo mode or legacy server), award score to everyone.
     if (nowDead && !existing._wasDeadOnLastSnapshot) {
         existing._wasDeadOnLastSnapshot = true;
         window._arenaRewardAmmoOnKill?.();
-        window._arenaAddScore?.(100);
+        const isMyKill = !snap.killerId || snap.killerId === multiplayerState.playerId;
+        if (isMyKill) {
+            window._arenaAddScore?.(100);
+        }
     }
     existing.isDead = nowDead;
 
@@ -220,8 +225,28 @@ function applyArenaStateSnapshot(snapshot, weaponPickups, utilityPickups) {
         const p1ScoreEl = document.getElementById('koth-p1-score');
         const p2ScoreEl = document.getElementById('koth-p2-score');
         const statusEl = document.getElementById('koth-status');
+        
         if (p1ScoreEl) p1ScoreEl.textContent = Math.floor(koth.scores.p1 || 0);
         if (p2ScoreEl) p2ScoreEl.textContent = Math.floor(koth.scores.p2 || 0);
+
+        if (snapshot.players) {
+            const p1 = snapshot.players.find(p => p.id === 'p1');
+            const p2 = snapshot.players.find(p => p.id === 'p2');
+            const p1NameEl = document.getElementById('koth-p1-name');
+            const p2NameEl = document.getElementById('koth-p2-name');
+            if (p1NameEl && p1) p1NameEl.textContent = p1.nickname || 'Jugador 1';
+            if (p2NameEl && p2) p2NameEl.textContent = p2.nickname || 'Jugador 2';
+        }
+        
+        const targetEl1 = document.getElementById('koth-target-score1');
+        const targetEl2 = document.getElementById('koth-target-score2');
+        if (targetEl1 && snapshot.wave) targetEl1.textContent = snapshot.wave.maxWaves || 1000;
+        if (targetEl2 && snapshot.wave) targetEl2.textContent = snapshot.wave.maxWaves || 1000;
+        
+        if (multiplayerState.playerId && koth.scores[multiplayerState.playerId] !== undefined) {
+            gameState.score = Math.floor(koth.scores[multiplayerState.playerId]);
+        }
+
         if (statusEl) {
             if (koth.hill.ownerId) {
                 statusEl.textContent = `Owned by ${koth.hill.ownerId}`;
@@ -279,7 +304,7 @@ function applyArenaStateSnapshot(snapshot, weaponPickups, utilityPickups) {
     updateEnemiesHud();
 }
 
-// ── Message handler ───────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Message handler Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, selectedMap, selectedDifficulty) {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (!msg || typeof msg !== 'object') return;
@@ -320,11 +345,26 @@ export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, sel
     }
     if (msg.type === 'room_full') { setMultiplayerStatus('Room full (2/2 players)'); return; }
     if (msg.type === 'match_victory' || msg.type === 'koth_victory') {
-        // Trigger the victory screen on both clients when the server signals the win
+        let isDefeat = false;
+        
+        if (msg.type === 'koth_victory') {
+            isDefeat = msg.winnerId !== multiplayerState.playerId;
+            // Force final score update from the server message before it locks
+            if (msg.scores && msg.scores[multiplayerState.playerId] !== undefined) {
+                gameState.score = Math.floor(msg.scores[multiplayerState.playerId]);
+            }
+        } else {
+            // Award the last kill's points before submitting for match_victory
+            if (msg.lastKillerId && msg.lastKillerId === multiplayerState.playerId) {
+                window._arenaAddScore?.(100);
+            }
+        }
+        
+        // Trigger the victory/defeat screen on both clients when the server signals the end
         window._arenaStopPlayerLoops?.();
         window._arenaSubmitScore?.();
         if (typeof window._arenaServerTriggerVictory === 'function') {
-            window._arenaServerTriggerVictory(msg.wave || 0);
+            window._arenaServerTriggerVictory(msg.wave || 0, isDefeat);
         }
         return;
     }
@@ -369,7 +409,7 @@ export function handleMultiplayerMessage(raw, weaponPickups, utilityPickups, sel
     if (remote) updateRemoteAvatarFromSnapshot(remote);
 }
 
-// ── Connection ────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬ Connection Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 export function connectMultiplayerArena(weaponPickups, utilityPickups, selectedMap, selectedDifficulty) {
     if (!isMultiplayerArenaEnabled()) return;
     if (!('WebSocket' in window)) { setMultiplayerStatus('WebSocket not supported'); return; }

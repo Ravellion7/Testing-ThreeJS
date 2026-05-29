@@ -32,16 +32,9 @@ Use this URL:
 
 Or click **ARENA MULTIPLAYER (2P)** in the main menu.
 
-## 5) Test with 2 players
-Open two browser windows/tabs and join multiplayer mode from both.
+## 5) Test with 2 or more players
+Open as many browser windows/tabs as you want and join multiplayer mode from all of them.
 
-- First player gets slot `p1`
-- Second player gets slot `p2`
-- Third player gets `room full`
+Para borrar la leaderboard has `localStorage.removeItem('crownfall_leaderboard')` en la consola del navegador.  
 
-## Notes
-- This is a starter implementation.
-- Current sync sends only player transform (position + Y rotation).
-- Basic server-authoritative hit and damage sync is enabled for rifle shooting between players.
-- Wave enemies are disabled while multiplayer mode is active.
-- Ammo/reload is still client-side for now.
+

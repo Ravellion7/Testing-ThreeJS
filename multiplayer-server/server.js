@@ -5,7 +5,11 @@ const THREE = require('three');
 
 const PORT = process.env.PORT || 8080;
 const TICK_RATE = 60;
-const MAX_PLAYERS = 4; // Increased for KOTH
+// Arena mode requires 2 players; KOTH requires 4.
+// Use getRequiredPlayers() instead of a fixed constant.
+function getRequiredPlayers() {
+  return worldState.gameMode === 'koth' ? 4 : 2;
+}
 
 const FLOOR_Y = -0.12;
 const PLAYER_BASE_HEALTH = 100;
@@ -346,12 +350,14 @@ function applyDamageToPlayer(player, amount) {
   }
 }
 
-function applyDamageToEnemy(enemy, amount) {
+function applyDamageToEnemy(enemy, amount, killerId = null) {
   if (!enemy || enemy.isDead) return false;
   enemy.health = Math.max(0, enemy.health - Math.max(0, amount));
   if (enemy.health > 0) return false;
   enemy.isDead = true;
   enemy.state = 'dead';
+  enemy.killerId = killerId || null;
+  worldState.lastKillerId = killerId || null;
   worldState.wave.kills = Math.min(worldState.wave.targetKills, worldState.wave.kills + 1);
   return true;
 }
@@ -396,7 +402,7 @@ function spawnEnemy() {
 }
 
 function updateWave(dtSeconds) {
-  if (players.size < MAX_PLAYERS) {
+  if (players.size < getRequiredPlayers()) {
     return;
   }
 
@@ -432,7 +438,7 @@ function updateWave(dtSeconds) {
     if (maxW > 0 && wave.current >= maxW) {
       if (!worldState.matchVictoryTriggered) {
         worldState.matchVictoryTriggered = true;
-        broadcastJson({ type: 'match_victory', wave: wave.current });
+        broadcastJson({ type: 'match_victory', wave: wave.current, lastKillerId: worldState.lastKillerId || null });
       }
       // After victory, stop wave progression entirely - no more waves
       return;
@@ -443,7 +449,7 @@ function updateWave(dtSeconds) {
 }
 
 function updateEnemies(dtSeconds) {
-  if (players.size < MAX_PLAYERS) {
+  if (players.size < getRequiredPlayers()) {
     return;
   }
 
@@ -583,7 +589,7 @@ function updateKOTH(dt) {
     koth.scores[koth.hill.ownerId] += dt * 10;
     if (worldState.maxWaves > 0 && koth.scores[koth.hill.ownerId] >= worldState.maxWaves && !worldState.matchVictoryTriggered) {
       worldState.matchVictoryTriggered = true;
-      broadcastJson({ type: 'koth_victory', winnerId: koth.hill.ownerId });
+      broadcastJson({ type: 'koth_victory', winnerId: koth.hill.ownerId, scores: koth.scores });
     }
   }
 }
@@ -651,7 +657,7 @@ function handleRifleShot(player, message) {
   if (selectedPlayerHit) {
     applyDamageToPlayer(selectedPlayerHit, RIFLE_DAMAGE, player.id);
   } else if (selectedEnemy) {
-    applyDamageToEnemy(selectedEnemy, RIFLE_DAMAGE);
+    applyDamageToEnemy(selectedEnemy, RIFLE_DAMAGE, player.id);
   }
 }
 
@@ -669,6 +675,9 @@ function applyDamageToPlayer(targetPlayer, damage, attackerId) {
     broadcastJson({ type: 'player_eliminated', playerId: targetPlayer.id, attackerId });
     if (worldState.gameMode === 'koth') {
       targetPlayer.respawnTimer = 3;
+      if (attackerId && worldState.koth.scores[attackerId] !== undefined) {
+        worldState.koth.scores[attackerId] += 100;
+      }
     }
   }
 }
@@ -686,6 +695,7 @@ function buildArenaSnapshot() {
       health: enemy.health,
       isDead: enemy.isDead,
       state: enemy.state,
+      killerId: enemy.killerId || null,
     })),
     koth: worldState.koth,
     wave: {
@@ -749,14 +759,15 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'join_arena') {
-      if (players.size >= MAX_PLAYERS) {
-        sendJson(socket, { type: 'room_full', message: `Arena room already has ${MAX_PLAYERS} players.` });
+      const requiredPlayers = getRequiredPlayers();
+      if (players.size >= requiredPlayers) {
+        sendJson(socket, { type: 'room_full', message: `Arena room already has ${requiredPlayers} players.` });
         return;
       }
 
       const id = getFreePlayerId();
       if (!id) {
-        sendJson(socket, { type: 'room_full', message: `Arena room already has ${MAX_PLAYERS} players.` });
+        sendJson(socket, { type: 'room_full', message: `Arena room already has ${getRequiredPlayers()} players.` });
         return;
       }
 
@@ -807,7 +818,7 @@ wss.on('connection', (socket) => {
         nickname: pState.nickname
       });
 
-      if (players.size < MAX_PLAYERS) {
+      if (players.size < getRequiredPlayers()) {
         resetArenaState();
         sendJson(socket, { type: 'waiting_for_player' });
       } else {
@@ -830,7 +841,7 @@ wss.on('connection', (socket) => {
         });
       }
 
-      if (players.size < MAX_PLAYERS) {
+      if (players.size < getRequiredPlayers()) {
         resetArenaState();
         broadcastJson(buildArenaSnapshot());
       }
@@ -879,7 +890,7 @@ wss.on('connection', (socket) => {
       });
     }
 
-    if (players.size < MAX_PLAYERS) {
+    if (players.size < getRequiredPlayers()) {
       resetArenaState();
       broadcastJson(buildArenaSnapshot());
     }
