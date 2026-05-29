@@ -80,7 +80,8 @@ export function handlePlayerDeath() {
         if (respawnOverlay) respawnOverlay.style.display = 'flex';
     } else {
         document.getElementById('death-overlay')?.classList.add('active');
-        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
+        const modeStr = gameState.gameMode === 'koth' ? 'King of the Hill' : 'Arena';
+        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)), modeStr);
     }
     
     playPositionalOneShot('../Sounds/character_death.mp3', audioConfig.characterDeathVolume, playerRoot, { refDistance: 7, maxDistance: 90, rolloff: 1.2 });
@@ -322,7 +323,8 @@ export function attachInputHandlers(utilityPickups, weaponPickups, multiplayerSt
         stopPlayerFootstepSound();
     };
     window._arenaSubmitScore = () => {
-        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)));
+        const modeStr = gameState.gameMode === 'koth' ? 'King of the Hill' : 'Arena';
+        submitLeaderboardScore(Math.max(0, Math.floor(gameState.score || 0)), modeStr);
     };
     window._arenaRewardAmmoOnKill = () => {
         rewardAmmoOnEnemyKill(30);

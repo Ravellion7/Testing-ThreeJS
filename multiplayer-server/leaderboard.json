@@ -12,6 +12,12 @@
     "date": "05/28"
   },
   {
+    "name": "Player",
+    "score": 560,
+    "mode": "Arena",
+    "date": "05/28"
+  },
+  {
     "name": "Someone",
     "score": 500,
     "mode": "Arena",
@@ -32,6 +38,12 @@
   {
     "name": "Someone",
     "score": 469,
+    "mode": "Arena",
+    "date": "05/28"
+  },
+  {
+    "name": "Player",
+    "score": 413,
     "mode": "Arena",
     "date": "05/28"
   },

@@ -1,6 +1,3 @@
-// Leaderboard JavaScript - Crownfall
-// Front-end only - no data management, only navigation
-
 function getSavedSettings() {
     const defaults = {
         musicVolume: 100,
@@ -26,7 +23,7 @@ function getSavedSettings() {
                 controls: { ...defaults.controls, ...(parsed.controls || {}) }
             };
         }
-    } catch (e) {}
+    } catch (e) { }
     return defaults;
 }
 
@@ -36,7 +33,7 @@ mainMenuMusic.loop = true;
 mainMenuMusic.volume = settings.muteAll ? 0 : 0.22 * (settings.musicVolume / 100);
 
 function playMainMenuMusic() {
-    mainMenuMusic.play().catch(() => {});
+    mainMenuMusic.play().catch(() => { });
 }
 
 function setupMainMenuMusicUnlock() {
@@ -53,7 +50,7 @@ function mergeAndSortLeaderboards(server, local) {
     const combined = [...(server || []), ...(local || [])];
     const unique = [];
     const seen = new Set();
-    
+
     combined.forEach(entry => {
         if (!entry) return;
         const key = `${entry.name || 'Anonymous'}_${entry.mode || 'Arena'}_${entry.score || 0}_${entry.date || '01/01'}`;
@@ -62,7 +59,7 @@ function mergeAndSortLeaderboards(server, local) {
             unique.push(entry);
         }
     });
-    
+
     unique.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
     return unique.slice(0, 10);
 }
@@ -99,13 +96,13 @@ function fetchLeaderboard() {
     };
 
     try {
-        const wsUrl = 'ws://localhost:8080';
+        const wsUrl = 'wss://preston-rental-respect-contemporary.trycloudflare.com';
         socket = new WebSocket(wsUrl);
 
         // 1.5 seconds timeout to fallback to local scores if server is not responding
         connectionTimeout = setTimeout(() => {
             if (socket.readyState !== WebSocket.OPEN) {
-                try { socket.close(); } catch (err) {}
+                try { socket.close(); } catch (err) { }
                 useLocalFallback('Offline — showing local scores');
             }
         }, 1500);
@@ -172,29 +169,29 @@ function renderLeaderboard(data) {
 }
 
 // Initialize leaderboard page
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     setupMainMenuMusicUnlock();
     initializeEventListeners();
     fetchLeaderboard();
-    
+
     console.log('%c Crownfall Leaderboard ', 'background: #1a1410; color: #daa520; font-size: 16px; font-weight: bold;');
 });
 
 // Initialize event listeners
 function initializeEventListeners() {
     // Refresh button
-    document.getElementById('refresh-btn').addEventListener('click', function(e) {
+    document.getElementById('refresh-btn').addEventListener('click', function (e) {
         e.preventDefault();
         fetchLeaderboard();
     });
-    
+
     // Back button
-    document.getElementById('back-btn').addEventListener('click', function() {
+    document.getElementById('back-btn').addEventListener('click', function () {
         window.location.href = 'mainmenu.html';
     });
-    
+
     // ESC key to go back
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             window.location.href = 'mainmenu.html';
         }

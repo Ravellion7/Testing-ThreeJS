@@ -171,7 +171,7 @@ export const gameState = {
 
 export const multiplayerState = {
     enabled: urlParams.get('multiplayer') === '1',
-    serverUrl: urlParams.get('ws') || 'ws://localhost:8080',
+    serverUrl: urlParams.get('ws') || 'wss://preston-rental-respect-contemporary.trycloudflare.com',
     socket: null, playerId: null, matchStarted: false,
     sharedArenaActive: false, statusElement: null, statusText: 'Disconnected',
     lastPoseSentAt: 0, poseSendIntervalMs: 16, // Increased update frequency (was 50ms)
